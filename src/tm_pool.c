@@ -36,6 +36,7 @@ Pool *Pool_new(tm_size size){
         .size = size,
         .heap = 1,              // 0 == NULL
         .stack = size,          // size - 1???
+        .used_byes = 1,
         .filled_index = 0,
         .points_index = 0
     };
@@ -47,7 +48,7 @@ Pool *Pool_new(tm_size size){
 
     // Index 0 is NULL and taken
     pool->filled[0] = 0;        // it has no data in it to prevent deallocation from caring about it
-    pool->points[0] = 1;          // but it is "used". This prevents it from being used by any user value
+    pool->points[0] = 1;          // but it is "used_byes". This prevents it from being used by any user value
     pool->pointers[0] = (poolptr){.size=1, .ptr=0};
     *(pool->pool) = 0;             // This should NEVER change (for diagnostics)
 
@@ -121,8 +122,8 @@ tm_index Pool_alloc(Pool *pool, tm_index size){
     // TODO: Use freed first
     printf("ALLOC=%u\n", size);
     printf("stack=%u\n", pool->stack);
-    printf("left=%u\n", Pool_left(pool));
-    if(size > Pool_left(pool)) return 0;  // TODO: Deallocate here
+    printf("left=%u\n", Pool_heap_left(pool));
+    if(size > Pool_heap_left(pool)) return 0;  // TODO: Deallocate here
     // find an unused index
     index = Pool_find_index(pool);
     if(not index) return 0;
@@ -132,19 +133,24 @@ tm_index Pool_alloc(Pool *pool, tm_index size){
     Pool_points_set(pool, index);
     pool->pointers[index] = (poolptr) {.size = size, .ptr = pool->heap};
     pool->heap += size;
+    pool->used_byes += size;
     return index;
 }
 
 
 void Pool_free(Pool *pool, tm_index index){
     Pool_filled_clear(pool, index);
+    pool->used_byes -= Pool_sizeof(pool, index);
 }
 
 
 tm_index Pool_defrag_full(Pool *pool){
     tm_index index, i;
     tm_index len = 0;
-    // clear away freed -- this will completely defragment
+
+    pool->used_byes = 1;
+
+    // clear away freed -- this function completely defrags
     for(i=0; i<TM_MAX_FILLED_PTRS; i++){
         pool->points[i] = pool->filled[i];
     }
@@ -169,6 +175,7 @@ tm_index Pool_defrag_full(Pool *pool){
     // memmove(to, from, size)
     memmove(Pool_location_void(pool, 1), Pool_void(pool, index), Pool_sizeof(pool, index));
     Pool_location_set(pool, index, 1);
+    pool->used_byes += Pool_sizeof(pool, index);
 
     // rest of memory is packed
     for(i=1; i<len; i++){
@@ -179,6 +186,7 @@ tm_index Pool_defrag_full(Pool *pool){
             Pool_sizeof(pool, index)
         );
         Pool_location_set(pool, index, Pool_location(pool, index-1) + Pool_sizeof(pool, index-1));
+        pool->used_byes += Pool_sizeof(pool, index);
     }
 
     // heap can now move left

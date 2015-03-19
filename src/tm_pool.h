@@ -28,6 +28,8 @@ typedef struct {
     tm_size size;                       // size of pool
     tm_size heap;                       // location of completely free memory
     tm_size stack;                      // used for tempalloc and tempfree, similar to standard stack
+    tm_size used_byes;                  // total amount of data in use out of size
+    tm_size used_pointers;              // total amount of pointers used
     tm_index filled_index;              // faster lookup of full pointers for defragmentation
     tm_index points_index;                // faster lookup for unused pointers for allocation
     uint8_t filled[TM_MAX_FILLED_PTRS]; // array of bit data for fast lookup of data to move
@@ -37,7 +39,9 @@ typedef struct {
     tm_index freed[TM_FREED_BINS];      // binned storage of all freed indexes
 } Pool;
 
-#define Pool_left(pool)                 (pool->stack - pool->heap)
+#define Pool_available(pool)            ((pool)->size - (pool)->used_byes)
+#define Pool_pointers_left(pool)        (TM_MAX_POOL_PTRS - (pool)->used_pointers)
+#define Pool_heap_left(pool)            (pool->stack - pool->heap)
 #define Pool_filled_index(index)        (index / 8)
 #define Pool_filled_bit(index)          (1 << (index % 8))
 #define Pool_filled_bool(pool, index)   ((pool)->filled[Pool_filled_index(index)] bitand Pool_filled_bit(index))
@@ -60,6 +64,7 @@ void            Pool_free(Pool *pool, tm_size size);
 
 /* Data types */
 #define Pool_uint8_p(pool, index)       ((uint8_t *)Pool_void(pool, index))
+#define Pool_uint16_p(pool, index)      ((uint16_t *)Pool_void(pool, index))
 #define Pool_uint32_p(pool, index)      ((uint32_t *)Pool_void(pool, index))
 
 #endif
