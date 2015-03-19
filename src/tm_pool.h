@@ -1,6 +1,6 @@
 #ifndef __mempool_h_
 #define __mempool_h_
-#include "memptr.h"
+#include "tm_types.h"
 
 
 #define TM_MAX_POOL_PTRS        (254)
