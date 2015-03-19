@@ -8,7 +8,7 @@ OBJECTS=$(patsubst %.c,%.o,$(SOURCES))
 TEST_SRC=$(wildcard tests/*_tests.c)
 TESTS=$(patsubst %.c,%,$(TEST_SRC))
 
-TARGET=build/libtinymem.a
+TARGET=build/tinymem.a
 SO_TARGET=$(patsubst %.a,%.so,$(TARGET))
 
 # The Target Build
@@ -19,39 +19,39 @@ dev: all
 
 $(TARGET): CFLAGS += -fPIC
 $(TARGET): build $(OBJECTS)
-       ar rcs $@ $(OBJECTS)
-       ranlib $@
+	ar rcs $@ $(OBJECTS)
+	ranlib $@
 
 $(SO_TARGET): $(TARGET) $(OBJECTS)
-       $(CC) -shared -o $@ $(OBJECTS)
+	$(CC) -shared -o $@ $(OBJECTS)
 
 build:
-       @mkdir -p build
-       @mkdir -p bin
+	@mkdir -p build
+	@mkdir -p bin
 
 # The Unit Tests
 .PHONY: tests
 tests: CFLAGS += $(TARGET)
 tests: $(TESTS)
-       sh ./tests/runtests.sh
+	sh ./tests/runtests.sh
 
 valgrind:
-       VALGRIND="valgrind --log-file=/tmp/valgrind-%p.log" $(MAKE)
+	VALGRIND="valgrind --log-file=/tmp/valgrind-%p.log" $(MAKE)
 
 # The Cleaner
 clean:
-       rm -rf build $(OBJECTS) $(TESTS)
-       rm -f tests/tests.log
-       find . -name "*.gc*" -exec rm {} \;
-       rm -rf `find . -name "*.dSYM" -print`
+	rm -rf build $(OBJECTS) $(TESTS)
+	rm -f tests/tests.log
+	find . -name "*.gc*" -exec rm {} \;
+	rm -rf `find . -name "*.dSYM" -print`
 
 # The Install
 install: all
-       install -d $(DESTDIR)/$(PREFIX)/lib/
-       install $(TARGET) $(DESTDIR)/$(PREFIX)/lib/
+	nstall -d $(DESTDIR)/$(PREFIX)/lib/
+	nstall $(TARGET) $(DESTDIR)/$(PREFIX)/lib/
 
 # The Checker
 BADFUNCS='[^_.>a-zA-Z0-9](str(n?cpy|n?cat|xfrm|n?dup|str|pbrk|tok|_)|stpn?cpy|a?sn?printf|byte_)'
 check:
-       @echo Files with potentially dangerous functions.
-       @egrep $(BADFUNCS) $(SOURCES) || true
+	@echo Files with potentially dangerous functions.
+	@egrep $(BADFUNCS) $(SOURCES) || true

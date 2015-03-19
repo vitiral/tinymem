@@ -1,19 +1,11 @@
 
 #ifndef __memptr_h
 #define __memptr_h
-#include "stdint.h"
-#define TM_INDEX_LEN (8)
-#define TM_INDEX_MAX (2 ^ TM_INDEX_LEN - 2)
+#include <stdint.h>
+#include <stdbool.h>
+#include "iso646.h"
 
-typedef tm_index uint8_t;
-
-
-/* tm_ptr structure
- * Main access to memory table pointers.
- */
-typedef struct {
-    tm_index table;
-    tm_index index;
-} tm_ptr;
+typedef uint16_t tm_index;
+typedef uint16_t tm_size;
 
 #endif
