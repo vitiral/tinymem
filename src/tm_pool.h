@@ -29,9 +29,9 @@ typedef struct {
     tm_size heap;                       // location of completely free memory
     tm_size stack;                      // used for tempalloc and tempfree, similar to standard stack
     tm_index filled_index;              // faster lookup of full pointers for defragmentation
-    tm_index used_index;                // faster lookup for unused pointers for allocation
+    tm_index points_index;                // faster lookup for unused pointers for allocation
     uint8_t filled[TM_MAX_FILLED_PTRS]; // array of bit data for fast lookup of data to move
-    uint8_t used[TM_MAX_FILLED_PTRS];   // array of bit data for fast lookup of unused pointers
+    uint8_t points[TM_MAX_FILLED_PTRS];   // array of bit data for fast lookup of unused pointers
     poolptr pointers[TM_MAX_POOL_PTRS]; // size and location of data in pool
     tm_index upool[TM_MAX_POOL_PTRS];   // extra space for processing
     tm_index freed[TM_FREED_BINS];      // binned storage of all freed indexes
@@ -40,12 +40,12 @@ typedef struct {
 #define Pool_left(pool)                 (pool->stack - pool->heap)
 #define Pool_filled_index(index)        (index / 8)
 #define Pool_filled_bit(index)          (1 << (index % 8))
-#define Pool_filled(pool, index)        ((pool)->filled[Pool_filled_index(index)] bitand Pool_filled_bit(index))
+#define Pool_filled_bool(pool, index)   ((pool)->filled[Pool_filled_index(index)] bitand Pool_filled_bit(index))
 #define Pool_filled_set(pool, index)    ((pool)->filled[Pool_filled_index(index)] |=  Pool_filled_bit(index))
 #define Pool_filled_clear(pool, index)  ((pool)->filled[Pool_filled_index(index)] &= ~Pool_filled_bit(index))
-#define Pool_used(pool, index)          ((pool)->used[Pool_filled_index(index)] bitand Pool_filled_bit(index))
-#define Pool_used_set(pool, index)      ((pool)->used[Pool_filled_index(index)]   |=  Pool_filled_bit(index))
-#define Pool_used_clear(pool, index)    ((pool)->used[Pool_filled_index(index)]   &= ~Pool_filled_bit(index))
+#define Pool_points_bool(pool, index)     ((pool)->points[Pool_filled_index(index)] bitand Pool_filled_bit(index))
+#define Pool_points_set(pool, index)      ((pool)->points[Pool_filled_index(index)]   |=  Pool_filled_bit(index))
+#define Pool_points_clear(pool, index)    ((pool)->points[Pool_filled_index(index)]   &= ~Pool_filled_bit(index))
 #define Pool_sizeof(pool, index)        ((pool)->pointers[index].size) // get size of data at index
 
 #define Pool_location(pool, index)              ((pool)->pointers[index].ptr)  // location of pointer inside pool

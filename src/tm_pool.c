@@ -37,7 +37,7 @@ Pool *Pool_new(tm_size size){
         .heap = 1,              // 0 == NULL
         .stack = size,          // size - 1???
         .filled_index = 0,
-        .used_index = 0
+        .points_index = 0
     };
     pool->pool = malloc(size);
     check_mem(pool->pool);
@@ -47,7 +47,7 @@ Pool *Pool_new(tm_size size){
 
     // Index 0 is NULL and taken
     pool->filled[0] = 0;        // it has no data in it to prevent deallocation from caring about it
-    pool->used[0] = 1;          // but it is "used". This prevents it from being used by any user value
+    pool->points[0] = 1;          // but it is "used". This prevents it from being used by any user value
     pool->pointers[0] = (poolptr){.size=1, .ptr=0};
     *(pool->pool) = 0;             // This should NEVER change (for diagnostics)
 
@@ -60,12 +60,12 @@ Pool *Pool_new(tm_size size){
         pool->filled[i] = 0;
     }
     for(i=1; i<TM_MAX_FILLED_PTRS - 1; i++){
-        pool->used[i] = 0;
+        pool->points[i] = 0;
     }
     pool->filled[TM_MAX_FILLED_PTRS - 1] = 0; // filled is 0 so deallocate ignores them
-    // The last "used" values need to be 1 as they don't actually exist and we don't want to put data
+    // The last "points" values need to be 1 as they don't actually exist and we don't want to put data
     // there
-    pool->used[TM_MAX_FILLED_PTRS - 1] = TM_LAST_USED;
+    pool->points[TM_MAX_FILLED_PTRS - 1] = TM_LAST_USED;
 
     return pool;
 error:
@@ -88,19 +88,19 @@ void *Pool_void(Pool *pool, tm_index index){
 tm_index Pool_find_index(Pool *pool){
     tm_index index, i, b;
     unsigned int bit;
-    unsigned int *used = (unsigned int *)pool->used;
+    unsigned int *points = (unsigned int *)pool->points;
     printf("max_filled_int_index=%u\n", TM_MAX_FILLED_INT);
     printf("max_UINT=0x%X\n", MAXUINT);
     for(i=0; i<TM_MAX_FILLED_INT; i++){
-        if(used[i] != MAXUINT){
+        if(points[i] != MAXUINT){
             printf("i=%u\n", i);
             // There is an empty value
             bit = 1;
             for(b=0; b<INTBITS; b++){
                 printf("bit=%u\n", bit);
-                if(not (used[i] bitand bit)){
+                if(not (points[i] bitand bit)){
                     index = i * INTBITS + b;
-                    printf("used=%u\n", used[i]);
+                    printf("points=%u\n", points[i]);
                     printf("index=%u\n", index);
                     // Check values
                     if(((unsigned int *)(pool->filled))[i] bitand bit != 0) return 0;
@@ -129,7 +129,7 @@ tm_index Pool_alloc(Pool *pool, tm_index size){
     printf("index=%u\n", index);
     printf("filled[%u] |= 0x%X\n", Pool_filled_index(index), Pool_filled_bit(index));
     Pool_filled_set(pool, index);
-    Pool_used_set(pool, index);
+    Pool_points_set(pool, index);
     pool->pointers[index] = (poolptr) {.size = size, .ptr = pool->heap};
     pool->heap += size;
     return index;
@@ -146,12 +146,12 @@ tm_index Pool_defrag_full(Pool *pool){
     tm_index len = 0;
     // clear away freed -- this will completely defragment
     for(i=0; i<TM_MAX_FILLED_PTRS; i++){
-        pool->used[i] = pool->filled[i];
+        pool->points[i] = pool->filled[i];
     }
-    pool->used[i-1] |= TM_LAST_USED;
+    pool->points[i-1] |= TM_LAST_USED;
     // Move used indexes into upool and sort them
     for(index=0; index<TM_MAX_POOL_PTRS; index++){
-        if(Pool_filled(pool, index)){
+        if(Pool_filled_bool(pool, index)){
             pool->upool[len] = index;
             len++;
         }
