@@ -171,7 +171,7 @@ void Pool_free(Pool *pool, tm_index index){
 
 
 tm_index Pool_defrag_full(Pool *pool){
-    tm_index index, i;
+    tm_index prev_index, index, i;
     tm_index len = 0;
 
     pool->used_bytes = 1;
@@ -209,18 +209,19 @@ tm_index Pool_defrag_full(Pool *pool){
 
     // rest of memory is packeduse2
     for(i=1; i<len; i++){
+        prev_index = pool->upool[i-1];
         index = pool->upool[i];
         memmove(
-            Pool_void(pool, index-1) + Pool_sizeof(pool, index-1),
+            Pool_void(pool, prev_index) + Pool_sizeof(pool, prev_index),
             Pool_void(pool, index),
             Pool_sizeof(pool, index)
         );
-        Pool_location_set(pool, index, Pool_location(pool, index-1) + Pool_sizeof(pool, index-1));
+        Pool_location_set(pool, index, Pool_location(pool, prev_index) + Pool_sizeof(pool, prev_index));
         pool->used_bytes += Pool_sizeof(pool, index);
         pool->used_pointers++;
     }
 
     // heap can now move left
-    pool->heap = Pool_location(pool, index-1) + Pool_sizeof(pool, index-1);
+    pool->heap = Pool_location(pool, index) + Pool_sizeof(pool, index);
     return;
 }

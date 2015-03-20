@@ -106,6 +106,9 @@ char *test_tm_pool_defrag_full(){
     printf("Defraging\n");
     Pool_defrag_full(pool);
 
+    mu_assert(Pool_heap_left(pool) == size - 20200 - 1, "fdefrag heap left 3");
+    mu_assert(Pool_available(pool) == size - 20200 - 1, "defrag available 3");
+    mu_assert(pool->used_pointers == 101, "defrag ptrs used 3");
     c = 0;
     for(i=1; i<201; i++){
         if(not i%2){

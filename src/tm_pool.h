@@ -53,7 +53,7 @@ typedef struct {
 #define Pool_sizeof(pool, index)        ((pool)->pointers[index].size) // get size of data at index
 
 #define Pool_location(pool, index)              ((pool)->pointers[index].ptr)  // location of pointer inside pool
-#define Pool_location_set(pool, index, loc)     ((pool)->pointers[index].ptr = loc)
+#define Pool_location_set(pool, index, loc)     (Pool_location(pool, index) = loc)
 #define Pool_location_void(pool, loc)           ((void*)(pool)->pool + loc)    // pointer of location
 
 void            Pool_delete(Pool *pool);
