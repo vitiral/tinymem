@@ -96,7 +96,7 @@ char *test_tm_pool_defrag_full(){
     mu_assert(pool->used_bytes == 1 + calculated_use, "fdefrag used bytes");
     mu_assert(Pool_heap_left(pool) == size - 1 - calculated_use, "fdefrag heap left");
     mu_assert(Pool_available(pool) == size - 1 - calculated_use, "fdefrag available 1");
-    // free every other element
+    // free odd elements
     for(i=1; i<201; i+=2){
         Pool_free(pool, data[i]);
     }
@@ -119,6 +119,11 @@ char *test_tm_pool_defrag_full(){
             }
         }
         else c+=i;  // odds were deleted
+    }
+    // reallocate
+    for(i=1; i<100; i+=2){
+        j = Pool_alloc(pool, i*2);
+        mu_assert(j == i, "defrag reget indexes");
     }
     return NULL;
 }

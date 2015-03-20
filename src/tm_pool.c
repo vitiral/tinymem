@@ -181,6 +181,8 @@ tm_index Pool_defrag_full(Pool *pool){
     for(i=0; i<TM_MAX_FILLED_PTRS; i++){
         pool->points[i] = pool->filled[i];
     }
+    pool->points[0] |= 1;  // NULL needs to be taken
+
     pool->points[i-1] |= TM_LAST_USED;
 
     // Move used indexes into upool and sort them
@@ -194,8 +196,8 @@ tm_index Pool_defrag_full(Pool *pool){
         pool->heap = 1;
         return 0;
     }
-    /*bsort_indexes(pool, pool->upool, len);*/
-    heap_sort(pool, pool->upool, len);
+
+    heap_sort(pool, pool->upool, len);  // kind of a pun, sorting the heap... haha
 
     // we now have sorted indexes by location. We just need to
     // move all memory to the left
