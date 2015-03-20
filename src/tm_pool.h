@@ -7,8 +7,8 @@
 #define TM_MAX_FILLED_PTRS      (TM_MAX_POOL_PTRS / 8 + (TM_MAX_POOL_PTRS % 8 ? 1:0))
 #define TM_MAX_FILLED_INT       (TM_MAX_FILLED_PTRS / sizeof(int) + \
                                     ((TM_MAX_FILLED_PTRS % sizeof(int)) ? 1:0))
-#define TM_FREED_BINS           (12)
-#define TM_FREED_BINSIZE        (18)
+#define TM_UPOOL_SIZE           (TM_MAX_POOL_PTRS * 2)
+#define TM_UPOOL_ALOCATION_SIZE (sizeof(LinkedIndexArray))
 #define INTBITS                 (sizeof(int) * 8)
 #define MAXUINT                 ((unsigned int) 0xFFFFFFFFFFFFFFFF)
 #define NULL_poolptr            ((poolptr){.size=0, .ptr=0})
@@ -28,14 +28,16 @@ typedef struct {
     tm_size size;                       // size of pool
     tm_size heap;                       // location of completely free memory
     tm_size stack;                      // used for tempalloc and tempfree, similar to standard stack
-    tm_size used_bytes;                  // total amount of data in use out of size
+    tm_size used_bytes;                 // total amount of data in use out of size
     tm_size used_pointers;              // total amount of pointers used
     tm_index filled_index;              // faster lookup of full pointers for defragmentation
     tm_index points_index;                // faster lookup for unused pointers for allocation
+    tm_size uheap;                      // heap of the upool
+    tm_size ustack;                     // stack of the upool
     uint8_t filled[TM_MAX_FILLED_PTRS]; // array of bit data for fast lookup of data to move
     uint8_t points[TM_MAX_FILLED_PTRS];   // array of bit data for fast lookup of unused pointers
     poolptr pointers[TM_MAX_POOL_PTRS]; // size and location of data in pool
-    tm_index upool[TM_MAX_POOL_PTRS];   // extra space for processing
+    uint8_t  upool[TM_UPOOL_SIZE];   // extra space for processing
     tm_index freed[TM_FREED_BINS];      // binned storage of all freed indexes
 } Pool;
 
@@ -47,14 +49,18 @@ typedef struct {
 #define Pool_filled_bool(pool, index)   ((pool)->filled[Pool_filled_index(index)] bitand Pool_filled_bit(index))
 #define Pool_filled_set(pool, index)    ((pool)->filled[Pool_filled_index(index)] |=  Pool_filled_bit(index))
 #define Pool_filled_clear(pool, index)  ((pool)->filled[Pool_filled_index(index)] &= ~Pool_filled_bit(index))
-#define Pool_points_bool(pool, index)     ((pool)->points[Pool_filled_index(index)] bitand Pool_filled_bit(index))
-#define Pool_points_set(pool, index)      ((pool)->points[Pool_filled_index(index)]   |=  Pool_filled_bit(index))
-#define Pool_points_clear(pool, index)    ((pool)->points[Pool_filled_index(index)]   &= ~Pool_filled_bit(index))
+#define Pool_points_bool(pool, index)   ((pool)->points[Pool_filled_index(index)] bitand Pool_filled_bit(index))
+#define Pool_points_set(pool, index)    ((pool)->points[Pool_filled_index(index)]   |=  Pool_filled_bit(index))
+#define Pool_points_clear(pool, index)  ((pool)->points[Pool_filled_index(index)]   &= ~Pool_filled_bit(index))
 #define Pool_sizeof(pool, index)        ((pool)->pointers[index].size) // get size of data at index
 
 #define Pool_location(pool, index)              ((pool)->pointers[index].ptr)  // location of pointer inside pool
 #define Pool_location_set(pool, index, loc)     (Pool_location(pool, index) = loc)
-#define Pool_location_void(pool, loc)           ((void*)(pool)->pool + loc)    // pointer of location
+#define Pool_location_void(pool, loc)           ((void*)(pool)->pool + (loc))    // pointer of location
+
+
+#define Pool_uheap_left(pool)           (TM_UPOOL_SIZE - pool->uheap)
+#define Pool_uvoid(pool, index)         ((index) ? ((void *)(pool)->upool + index : NULL))
 
 void            Pool_delete(Pool *pool);
 Pool*           Pool_new(tm_size size);

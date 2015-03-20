@@ -73,6 +73,7 @@ Pool *Pool_new(tm_size size){
     *pool = (Pool) {
         .size = size,
         .heap = 1,              // 0 == NULL
+        .uheap = 1,
         .stack = size,          // size - 1???
         .used_bytes = 1,
         .used_pointers = 1,
@@ -124,6 +125,10 @@ void *Pool_void(Pool *pool, tm_index index){
     return Pool_location_void(pool, location);
 }
 
+void *Pool_uvoid(Pool *pool, tm_index index){
+    if(not index) return NULL;
+    return pool->upool + index;
+}
 
 tm_index Pool_find_index(Pool *pool){
     tm_index index, i, b;
@@ -145,6 +150,25 @@ tm_index Pool_find_index(Pool *pool){
     return 0;
 }
 
+
+tm_index Pool_ualloc(Pool *pool){
+    tm_index index;
+    if(pool->ustack < TM_UPOOL_SIZE) {
+        // free pointers available
+        index = ((tm_index *)pool->upool)[pool->ustack/2];
+        pool->ustack += 2;
+        return index;
+    }
+    if(size > Pool_uheap_left(pool)) return 0;
+    pool->uheap += TM_UPOOL_ALLOCATION_SIZE;
+    return pool->uheap - TM_UPOOL_ALLOCATION_SIZE;
+}
+
+
+void Pool_ufree(Pool *pool, tm_index index){
+    pool->ustack-=2;
+    ((tm_index *)pool->upool)[pool->ustack/2] = index;
+}
 
 tm_index Pool_alloc(Pool *pool, tm_index size){
     tm_index index;
