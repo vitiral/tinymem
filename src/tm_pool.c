@@ -2,7 +2,45 @@
 #include "tm_pool.h"
 #include "dbg.h"
 
-void bsort_indexes(Pool *pool, tm_index *array, tm_index len){
+#define IS_LESS(pool, v1, v2)  (Pool_location(pool, v1) < Pool_location(pool, v2))
+void siftDown(Pool *pool, tm_index *a, int16_t start, int16_t count);
+#define SWAP(r,s)  do{tm_index t=r; r=s; s=t;} while(0)
+
+
+void heap_sort(Pool *pool, tm_index *a, int16_t count){
+    int16_t start, end;
+
+    /* heapify */
+    for (start = (count-2)/2; start >=0; start--) {
+        siftDown(pool, a, start, count);
+    }
+
+    for (end=count-1; end > 0; end--) {
+        SWAP(a[end], a[0]);
+        siftDown(pool, a, 0, end);
+    }
+}
+
+
+void siftDown(Pool *pool, tm_index *a, int16_t start, int16_t end){
+    int16_t root = start;
+
+    while ( root*2+1 < end ) {
+        int16_t child = 2*root + 1;
+        if ((child + 1 < end) && IS_LESS(pool, a[child], a[child+1])) {
+            child += 1;
+        }
+        if (IS_LESS(pool, a[root], a[child])) {
+            SWAP(a[child], a[root]);
+            root = child;
+        }
+        else
+            return;
+    }
+}
+
+
+void bubble_sort(Pool *pool, tm_index *array, tm_index len){
     // sort indexes by location
     tm_index i, j;
     tm_index swap;
@@ -156,7 +194,8 @@ tm_index Pool_defrag_full(Pool *pool){
         pool->heap = 1;
         return 0;
     }
-    bsort_indexes(pool, pool->upool, len);
+    /*bsort_indexes(pool, pool->upool, len);*/
+    heap_sort(pool, pool->upool, len);
 
     // we now have sorted indexes by location. We just need to
     // move all memory to the left
