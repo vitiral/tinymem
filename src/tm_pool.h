@@ -21,14 +21,14 @@ typedef struct {
 
 /* Ptrpool
  * Contains the Ptr and Type information of every pool. Main lookup
- * for malloc and free
+ * for malloc and freeavai
  */
 typedef struct {
     uint8_t *pool;                      // pool location in memory
     tm_size size;                       // size of pool
     tm_size heap;                       // location of completely free memory
     tm_size stack;                      // used for tempalloc and tempfree, similar to standard stack
-    tm_size used_byes;                  // total amount of data in use out of size
+    tm_size used_bytes;                  // total amount of data in use out of size
     tm_size used_pointers;              // total amount of pointers used
     tm_index filled_index;              // faster lookup of full pointers for defragmentation
     tm_index points_index;                // faster lookup for unused pointers for allocation
@@ -39,8 +39,8 @@ typedef struct {
     tm_index freed[TM_FREED_BINS];      // binned storage of all freed indexes
 } Pool;
 
-#define Pool_available(pool)            ((pool)->size - (pool)->used_byes)
-#define Pool_pointers_left(pool)        (TM_MAX_POOL_PTRS - (pool)->used_pointers)
+#define Pool_available(pool)            ((pool)->size - (pool)->used_bytes)
+#define Pool_pointers_left(pool)        (TM_MAX_POOL_PTRS - (pool)->used_poin%ters)
 #define Pool_heap_left(pool)            (pool->stack - pool->heap)
 #define Pool_filled_index(index)        (index / 8)
 #define Pool_filled_bit(index)          (1 << (index % 8))
@@ -54,7 +54,7 @@ typedef struct {
 
 #define Pool_location(pool, index)              ((pool)->pointers[index].ptr)  // location of pointer inside pool
 #define Pool_location_set(pool, index, loc)     ((pool)->pointers[index].ptr = loc)
-#define Pool_location_void(pool, loc)           ((void*)((pool)->pool + loc))  // pointer of location
+#define Pool_location_void(pool, loc)           ((void*)(pool)->pool + loc)    // pointer of location
 
 void            Pool_delete(Pool *pool);
 Pool*           Pool_new(tm_size size);

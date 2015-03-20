@@ -10,7 +10,7 @@ void bsort_indexes(Pool *pool, tm_index *array, tm_index len){
     for (i = 0; i < len; i++){
         workdone = false;
         for (j = 0; j < len - 1; j++){
-            if (Pool_location(pool, array[j]) > Pool_location(pool, array[j-1])){
+            if (Pool_location(pool, array[j]) < Pool_location(pool, array[j-1])){
                 swap       = array[j];
                 array[j]   = array[j-1];
                 array[j-1] = swap;
@@ -36,7 +36,8 @@ Pool *Pool_new(tm_size size){
         .size = size,
         .heap = 1,              // 0 == NULL
         .stack = size,          // size - 1???
-        .used_byes = 1,
+        .used_bytes = 1,
+        .used_pointers = 1,
         .filled_index = 0,
         .points_index = 0
     };
@@ -48,7 +49,7 @@ Pool *Pool_new(tm_size size){
 
     // Index 0 is NULL and taken
     pool->filled[0] = 0;        // it has no data in it to prevent deallocation from caring about it
-    pool->points[0] = 1;          // but it is "used_byes". This prevents it from being used by any user value
+    pool->points[0] = 1;          // but it is "used_bytes". This prevents it from being used by any user value
     pool->pointers[0] = (poolptr){.size=1, .ptr=0};
     *(pool->pool) = 0;             // This should NEVER change (for diagnostics)
 
@@ -90,23 +91,13 @@ tm_index Pool_find_index(Pool *pool){
     tm_index index, i, b;
     unsigned int bit;
     unsigned int *points = (unsigned int *)pool->points;
-    printf("max_filled_int_index=%u\n", TM_MAX_FILLED_INT);
-    printf("max_UINT=0x%X\n", MAXUINT);
     for(i=0; i<TM_MAX_FILLED_INT; i++){
         if(points[i] != MAXUINT){
-            printf("i=%u\n", i);
             // There is an empty value
             bit = 1;
             for(b=0; b<INTBITS; b++){
-                printf("bit=%u\n", bit);
                 if(not (points[i] bitand bit)){
                     index = i * INTBITS + b;
-                    printf("points=%u\n", points[i]);
-                    printf("index=%u\n", index);
-                    // Check values
-                    if(((unsigned int *)(pool->filled))[i] bitand bit != 0) return 0;
-                    if(Pool_sizeof(pool, index) != 0) return 0;
-                    if(Pool_location(pool, index) != 0) return 0;
                     return index;
                 }
                 bit = bit << 1;
@@ -120,27 +111,24 @@ tm_index Pool_find_index(Pool *pool){
 tm_index Pool_alloc(Pool *pool, tm_index size){
     tm_index index;
     // TODO: Use freed first
-    printf("ALLOC=%u\n", size);
-    printf("stack=%u\n", pool->stack);
-    printf("left=%u\n", Pool_heap_left(pool));
     if(size > Pool_heap_left(pool)) return 0;  // TODO: Deallocate here
     // find an unused index
     index = Pool_find_index(pool);
     if(not index) return 0;
-    printf("index=%u\n", index);
-    printf("filled[%u] |= 0x%X\n", Pool_filled_index(index), Pool_filled_bit(index));
     Pool_filled_set(pool, index);
     Pool_points_set(pool, index);
     pool->pointers[index] = (poolptr) {.size = size, .ptr = pool->heap};
     pool->heap += size;
-    pool->used_byes += size;
+    pool->used_bytes += size;
+    pool->used_pointers++;
     return index;
 }
 
 
 void Pool_free(Pool *pool, tm_index index){
     Pool_filled_clear(pool, index);
-    pool->used_byes -= Pool_sizeof(pool, index);
+    pool->used_bytes -= Pool_sizeof(pool, index);
+    pool->used_pointers--;
 }
 
 
@@ -148,13 +136,15 @@ tm_index Pool_defrag_full(Pool *pool){
     tm_index index, i;
     tm_index len = 0;
 
-    pool->used_byes = 1;
+    pool->used_bytes = 1;
+    pool->used_pointers = 1;
 
     // clear away freed -- this function completely defrags
     for(i=0; i<TM_MAX_FILLED_PTRS; i++){
         pool->points[i] = pool->filled[i];
     }
     pool->points[i-1] |= TM_LAST_USED;
+
     // Move used indexes into upool and sort them
     for(index=0; index<TM_MAX_POOL_PTRS; index++){
         if(Pool_filled_bool(pool, index)){
@@ -175,9 +165,10 @@ tm_index Pool_defrag_full(Pool *pool){
     // memmove(to, from, size)
     memmove(Pool_location_void(pool, 1), Pool_void(pool, index), Pool_sizeof(pool, index));
     Pool_location_set(pool, index, 1);
-    pool->used_byes += Pool_sizeof(pool, index);
+    pool->used_bytes += Pool_sizeof(pool, index);
+    pool->used_pointers++;
 
-    // rest of memory is packed
+    // rest of memory is packeduse2
     for(i=1; i<len; i++){
         index = pool->upool[i];
         memmove(
@@ -186,7 +177,8 @@ tm_index Pool_defrag_full(Pool *pool){
             Pool_sizeof(pool, index)
         );
         Pool_location_set(pool, index, Pool_location(pool, index-1) + Pool_sizeof(pool, index-1));
-        pool->used_byes += Pool_sizeof(pool, index);
+        pool->used_bytes += Pool_sizeof(pool, index);
+        pool->used_pointers++;
     }
 
     // heap can now move left
