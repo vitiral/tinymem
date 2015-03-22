@@ -9,6 +9,9 @@ void siftDown(Pool *pool, tm_index *a, int16_t start, int16_t count);
 
 void heap_sort(Pool *pool, tm_index *a, int16_t count){
     int16_t start, end;
+    printf("count=%u\n", count);
+    printf("pool=%u\n", pool);
+    printf("a=%u\n", a);
 
     /* heapify */
     for (start = (count-2)/2; start >=0; start--) {
@@ -125,11 +128,6 @@ void *Pool_void(Pool *pool, tm_index index){
     return Pool_location_void(pool, location);
 }
 
-void *Pool_uvoid(Pool *pool, tm_index index){
-    if(not index) return NULL;
-    return pool->upool + index;
-}
-
 tm_index Pool_find_index(Pool *pool){
     tm_index index, i, b;
     unsigned int bit;
@@ -202,6 +200,7 @@ tm_index Pool_defrag_full(Pool *pool){
         return 0;
     }
 
+    printf("sorting...\n");
     heap_sort(pool, pool->upool, len);  // kind of a pun, sorting the heap... haha
 
     // we now have sorted indexes by location. We just need to
@@ -209,6 +208,7 @@ tm_index Pool_defrag_full(Pool *pool){
     // First memory can be moved to loc 1
     index = pool->upool[0];
     // memmove(to, from, size)
+    printf("moving...\n");
     memmove(Pool_location_void(pool, 1), Pool_void(pool, index), Pool_sizeof(pool, index));
     Pool_location_set(pool, index, 1);
     pool->used_bytes += Pool_sizeof(pool, index);
@@ -255,5 +255,11 @@ void Pool_ufree(Pool *pool, tm_index index){
     // TODO: if this can't work, mark flag for full defrag
     pool->ustack-=2;
     ((tm_index *)pool->upool)[pool->ustack/2] = index;
+}
+
+
+void *Pool_uvoid(Pool *pool, tm_index index){
+    if(not index) return NULL;
+    return pool->upool + index;
 }
 

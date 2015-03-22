@@ -10,7 +10,7 @@
 #define TM_MAX_FILLED_PTRS      (TM_MAX_POOL_PTRS / 8 + (TM_MAX_POOL_PTRS % 8 ? 1:0))
 #define TM_MAX_FILLED_INT       (TM_MAX_FILLED_PTRS / sizeof(int) + \
                                     ((TM_MAX_FILLED_PTRS % sizeof(int)) ? 1:0))
-#define TM_UPOOL_SIZE           (TM_MAX_POOL_PTRS * 2)
+#define TM_UPOOL_SIZE           (TM_MAX_POOL_PTRS * sizeof(tm_index))
 #define INTBITS                 (sizeof(int) * 8)
 #define MAXUINT                 ((unsigned int) 0xFFFFFFFFFFFFFFFF)
 #define NULL_poolptr            ((poolptr){.size=0, .ptr=0})
