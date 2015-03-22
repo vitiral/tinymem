@@ -9,9 +9,6 @@ void siftDown(Pool *pool, tm_index *a, int16_t start, int16_t count);
 
 void heap_sort(Pool *pool, tm_index *a, int16_t count){
     int16_t start, end;
-    printf("count=%u\n", count);
-    printf("pool=%u\n", pool);
-    printf("a=%u\n", a);
 
     /* heapify */
     for (start = (count-2)/2; start >=0; start--) {
@@ -76,8 +73,9 @@ Pool *Pool_new(tm_size size){
     *pool = (Pool) {
         .size = size,
         .heap = 1,              // 0 == NULL
-        .uheap = 1,
         .stack = size,          // size - 1???
+        .uheap = 0,
+        .ustack = TM_UPOOL_SIZE,
         .used_bytes = 1,
         .used_pointers = 1,
         .filled_index = 0,
@@ -240,27 +238,30 @@ tm_index Pool_defrag_full(Pool *pool){
 tm_index Pool_ualloc(Pool *pool, tm_size size){
     // The upool ASSUMES that all blocks are the same size. Make sure this is always true.
     tm_index index;
-    if(pool->ustack < size) {
+
+    printf("u_used=%u\n", Pool_ustack_used(pool));
+    if(Pool_ustack_used(pool)) {
         // free pointers available
-        index = ((tm_index *)pool->upool)[pool->ustack/2];
+        index = Pool_upool_get(pool, pool->ustack / 2);
+        printf("free index=%u\n", index);
         pool->ustack += 2;
         return index;
     }
-    if(size > Pool_uheap_left(pool)) return 0;
+    if(size > Pool_uheap_left(pool)) return TM_UPOOL_ERROR;
     pool->uheap += size;
     return pool->uheap - size;
 }
 
 
-void Pool_ufree(Pool *pool, tm_index index){
+void Pool_ufree(Pool *pool, tm_index location){
     // TODO: if this can't work, mark flag for full defrag
     pool->ustack-=2;
-    ((tm_index *)pool->upool)[pool->ustack/2] = index;
+    Pool_upool_set(pool, pool->ustack / 2, location);
 }
 
 
-void *Pool_uvoid(Pool *pool, tm_index index){
-    if(not index) return NULL;
-    return pool->upool + index;
+void *Pool_uvoid(Pool *pool, tm_index location){
+    if(location >= TM_UPOOL_ERROR) return NULL;
+    return pool->upool + location;
 }
 

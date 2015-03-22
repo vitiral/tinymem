@@ -127,6 +127,42 @@ char *test_tm_pool_defrag_full(){
     return NULL;
 }
 
+char *test_upool_basic(){
+    static int mchange = 32000 / 20;
+    int value;
+    int8_t i;
+    int m = 0;
+    tm_index index;
+    tm_index indexes[20];
+    Pool *pool = Pool_new(200);
+    mu_assert(pool, "upool basic");
+    for(i=0; i<20; i++){
+        indexes[i] = Pool_ualloc(pool, sizeof(int));
+        mu_assert(indexes[i] != TM_UPOOL_ERROR, "upool alloc");
+        *(int *)Pool_uvoid(pool, indexes[i]) = m;
+        mu_assert(*(int *)Pool_uvoid(pool, indexes[i]) == m, "upool sanity");
+        m += mchange;
+    }
+    for(i=1; i<20; i+=2){
+        Pool_ufree(pool, indexes[i]);
+    }
+    printf("changing\n");
+    m-=mchange;
+    for(i=19; i>=1; i-=2){
+        index = Pool_ualloc(pool, sizeof(int));
+        mu_assert(index == indexes[i], "upool realloc");
+        mu_assert(*(int *)Pool_uvoid(pool, indexes[i]) == m, "upool basic value");
+        *(int *)Pool_uvoid(pool, indexes[i]) = m;
+        m-=mchange;
+        printf("i=%u, m=%u\n", i, m);
+        value = *(int *)Pool_uvoid(pool, indexes[i-1]);
+        printf("value=%u\n", i);
+        mu_assert(value == m, "upool setting");
+        m-=mchange;
+    }
+    m = 0;
+    return NULL;
+}
 
 char *all_tests(){
     mu_suite_start();
@@ -134,6 +170,7 @@ char *all_tests(){
     mu_run_test(test_tm_pool_new);
     mu_run_test(test_tm_pool_alloc);
     mu_run_test(test_tm_pool_defrag_full);
+    mu_run_test(test_upool_basic);
     return NULL;
 }
 

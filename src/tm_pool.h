@@ -16,6 +16,8 @@
 #define NULL_poolptr            ((poolptr){.size=0, .ptr=0})
 #define TM_LAST_USED            ((uint8_t) (~(0x00FF >> (TM_MAX_POOL_PTRS % 8))))
 
+#define TM_UPOOL_ERROR          (TM_UPOOL_SIZE + 1)
+
 typedef struct {
     tm_size size;
     tm_size ptr;
@@ -62,6 +64,7 @@ typedef struct {
 
 
 #define Pool_uheap_left(pool)           (TM_UPOOL_SIZE - pool->uheap)
+#define Pool_ustack_used(pool)          (TM_UPOOL_SIZE - pool->ustack)
 
 void            Pool_delete(Pool *pool);
 Pool*           Pool_new(tm_size size);
