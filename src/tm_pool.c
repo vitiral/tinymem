@@ -151,25 +151,6 @@ tm_index Pool_find_index(Pool *pool){
 }
 
 
-tm_index Pool_ualloc(Pool *pool){
-    tm_index index;
-    if(pool->ustack < TM_UPOOL_SIZE) {
-        // free pointers available
-        index = ((tm_index *)pool->upool)[pool->ustack/2];
-        pool->ustack += 2;
-        return index;
-    }
-    if(size > Pool_uheap_left(pool)) return 0;
-    pool->uheap += TM_UPOOL_ALLOCATION_SIZE;
-    return pool->uheap - TM_UPOOL_ALLOCATION_SIZE;
-}
-
-
-void Pool_ufree(Pool *pool, tm_index index){
-    pool->ustack-=2;
-    ((tm_index *)pool->upool)[pool->ustack/2] = index;
-}
-
 tm_index Pool_alloc(Pool *pool, tm_index size){
     tm_index index;
     // TODO: Use freed first
@@ -251,3 +232,28 @@ tm_index Pool_defrag_full(Pool *pool){
     pool->heap = Pool_location(pool, index) + Pool_sizeof(pool, index);
     return;
 }
+
+
+/* uPool allocation and freeing. Used for internal methods
+ */
+tm_index Pool_ualloc(Pool *pool, tm_size size){
+    // The upool ASSUMES that all blocks are the same size. Make sure this is always true.
+    tm_index index;
+    if(pool->ustack < size) {
+        // free pointers available
+        index = ((tm_index *)pool->upool)[pool->ustack/2];
+        pool->ustack += 2;
+        return index;
+    }
+    if(size > Pool_uheap_left(pool)) return 0;
+    pool->uheap += size;
+    return pool->uheap - size;
+}
+
+
+void Pool_ufree(Pool *pool, tm_index index){
+    // TODO: if this can't work, mark flag for full defrag
+    pool->ustack-=2;
+    ((tm_index *)pool->upool)[pool->ustack/2] = index;
+}
+

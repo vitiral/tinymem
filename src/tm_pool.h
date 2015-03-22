@@ -1,14 +1,16 @@
 #ifndef __mempool_h_
 #define __mempool_h_
+#include <stdlib.h>
 #include "tm_types.h"
 
+#define TM_FREED_BINS           (16)
+#define TM_FREED_BINSIZE        (14)
 
 #define TM_MAX_POOL_PTRS        (254)
 #define TM_MAX_FILLED_PTRS      (TM_MAX_POOL_PTRS / 8 + (TM_MAX_POOL_PTRS % 8 ? 1:0))
 #define TM_MAX_FILLED_INT       (TM_MAX_FILLED_PTRS / sizeof(int) + \
                                     ((TM_MAX_FILLED_PTRS % sizeof(int)) ? 1:0))
 #define TM_UPOOL_SIZE           (TM_MAX_POOL_PTRS * 2)
-#define TM_UPOOL_ALOCATION_SIZE (sizeof(LinkedIndexArray))
 #define INTBITS                 (sizeof(int) * 8)
 #define MAXUINT                 ((unsigned int) 0xFFFFFFFFFFFFFFFF)
 #define NULL_poolptr            ((poolptr){.size=0, .ptr=0})
@@ -60,13 +62,17 @@ typedef struct {
 
 
 #define Pool_uheap_left(pool)           (TM_UPOOL_SIZE - pool->uheap)
-#define Pool_uvoid(pool, index)         ((index) ? ((void *)(pool)->upool + index : NULL))
 
 void            Pool_delete(Pool *pool);
 Pool*           Pool_new(tm_size size);
 void*           Pool_void(Pool *pool, tm_index index);
 tm_index        Pool_alloc(Pool *pool, tm_size size);
 void            Pool_free(Pool *pool, tm_size size);
+
+/* uPool allocation and freeing. Used for internal methods */
+tm_index Pool_ualloc(Pool *pool, tm_size size);
+void Pool_ufree(Pool *pool, tm_index index);
+void *Pool_uvoid(Pool *pool, tm_index index);
 
 /* Data types */
 #define Pool_uint8_p(pool, index)       ((uint8_t *)Pool_void(pool, index))
