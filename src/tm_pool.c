@@ -191,7 +191,7 @@ tm_index Pool_defrag_full(Pool *pool){
     // Move used indexes into upool and sort them
     for(index=0; index<TM_MAX_POOL_PTRS; index++){
         if(Pool_filled_bool(pool, index)){
-            pool->upool[len] = index;
+            Pool_upool_set(pool, len, index);
             len++;
         }
     }
@@ -201,12 +201,12 @@ tm_index Pool_defrag_full(Pool *pool){
     }
 
     printf("sorting...\n");
-    heap_sort(pool, pool->upool, len);  // kind of a pun, sorting the heap... haha
+    heap_sort(pool, (tm_index *)pool->upool, len);  // kind of a pun, sorting the heap... haha
 
     // we now have sorted indexes by location. We just need to
     // move all memory to the left
     // First memory can be moved to loc 1
-    index = pool->upool[0];
+    index = Pool_upool_get(pool, 0);
     // memmove(to, from, size)
     printf("moving...\n");
     memmove(Pool_location_void(pool, 1), Pool_void(pool, index), Pool_sizeof(pool, index));
@@ -214,10 +214,10 @@ tm_index Pool_defrag_full(Pool *pool){
     pool->used_bytes += Pool_sizeof(pool, index);
     pool->used_pointers++;
 
+    prev_index = index;
     // rest of memory is packeduse2
     for(i=1; i<len; i++){
-        prev_index = pool->upool[i-1];
-        index = pool->upool[i];
+        index = Pool_upool_get(pool, i);
         memmove(
             Pool_void(pool, prev_index) + Pool_sizeof(pool, prev_index),
             Pool_void(pool, index),
@@ -226,6 +226,7 @@ tm_index Pool_defrag_full(Pool *pool){
         Pool_location_set(pool, index, Pool_location(pool, prev_index) + Pool_sizeof(pool, prev_index));
         pool->used_bytes += Pool_sizeof(pool, index);
         pool->used_pointers++;
+        prev_index = index;
     }
 
     // heap can now move left

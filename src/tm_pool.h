@@ -73,6 +73,8 @@ void            Pool_free(Pool *pool, tm_size size);
 tm_index Pool_ualloc(Pool *pool, tm_size size);
 void Pool_ufree(Pool *pool, tm_index index);
 void *Pool_uvoid(Pool *pool, tm_index index);
+#define Pool_upool_get(pool, index)  (((tm_index *)((pool)->upool))[index])
+#define Pool_upool_set(pool, index, value)  (((tm_index *)((pool)->upool))[index] = value)
 
 /* Data types */
 #define Pool_uint8_p(pool, index)       ((uint8_t *)Pool_void(pool, index))
