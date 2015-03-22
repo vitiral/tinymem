@@ -74,12 +74,12 @@ Pool *Pool_new(tm_size size){
         .size = size,
         .heap = 1,              // 0 == NULL
         .stack = size,          // size - 1???
-        .uheap = 0,
-        .ustack = TM_UPOOL_SIZE,
         .used_bytes = 1,
         .used_pointers = 1,
         .filled_index = 0,
-        .points_index = 0
+        .points_index = 0,
+        .uheap = 0,
+        .ustack = TM_UPOOL_SIZE,
     };
     pool->pool = malloc(size);
     check_mem(pool->pool);
@@ -239,11 +239,11 @@ tm_index Pool_ualloc(Pool *pool, tm_size size){
     // The upool ASSUMES that all blocks are the same size. Make sure this is always true.
     tm_index index;
 
-    printf("u_used=%u\n", Pool_ustack_used(pool));
+    /*printf("u_used=%u\n", Pool_ustack_used(pool));*/
     if(Pool_ustack_used(pool)) {
         // free pointers available
         index = Pool_upool_get(pool, pool->ustack / 2);
-        printf("free index=%u\n", index);
+        /*printf("free index=%u\n", index);*/
         pool->ustack += 2;
         return index;
     }

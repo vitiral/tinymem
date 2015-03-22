@@ -154,13 +154,19 @@ char *test_upool_basic(){
         mu_assert(*(int *)Pool_uvoid(pool, indexes[i]) == m, "upool basic value");
         *(int *)Pool_uvoid(pool, indexes[i]) = m;
         m-=mchange;
-        printf("i=%u, m=%u\n", i, m);
+        /*printf("i=%u, m=%u\n", i, m);*/
         value = *(int *)Pool_uvoid(pool, indexes[i-1]);
-        printf("value=%u\n", i);
+        /*printf("value=%u\n", i);*/
         mu_assert(value == m, "upool setting");
         m-=mchange;
     }
     m = 0;
+    return NULL;
+}
+
+char *test_tm_free_foundation(){
+
+
     return NULL;
 }
 

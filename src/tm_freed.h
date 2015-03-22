@@ -10,8 +10,8 @@ typedef struct {
 
 tm_index    LIA_new(Pool *pool);
 void        LIA_del(Pool *pool, tm_index uindex);
-bool        LIA_append(Pool *pool, tm_index uindex, tm_index value);
-tm_index    LIA_pop(Pool *pool, tm_index uindex);
+bool        LIA_append(Pool *pool, tm_index *last, tm_index value);
+tm_index    LIA_pop(Pool *pool, tm_index *last, tm_size size);
 
 
 #define Pool_LIA(pool, index)                               ((LinkedIndexArray *) Pool_uvoid(pool, index))

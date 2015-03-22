@@ -62,10 +62,6 @@ typedef struct {
 #define Pool_location_set(pool, index, loc)     (Pool_location(pool, index) = loc)
 #define Pool_location_void(pool, loc)           ((void*)(pool)->pool + (loc))    // pointer of location
 
-
-#define Pool_uheap_left(pool)           (TM_UPOOL_SIZE - pool->uheap)
-#define Pool_ustack_used(pool)          (TM_UPOOL_SIZE - pool->ustack)
-
 void            Pool_delete(Pool *pool);
 Pool*           Pool_new(tm_size size);
 void*           Pool_void(Pool *pool, tm_index index);
@@ -78,6 +74,8 @@ void Pool_ufree(Pool *pool, tm_index index);
 void *Pool_uvoid(Pool *pool, tm_index index);
 #define Pool_upool_get(pool, index)  (((tm_index *)((pool)->upool))[index])
 #define Pool_upool_set(pool, index, value)  (((tm_index *)((pool)->upool))[index] = value)
+#define Pool_uheap_left(pool)           (pool->ustack - pool->uheap)
+#define Pool_ustack_used(pool)          (TM_UPOOL_SIZE - pool->ustack)
 
 /* Data types */
 #define Pool_uint8_p(pool, index)       ((uint8_t *)Pool_void(pool, index))
