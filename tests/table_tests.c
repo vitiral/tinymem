@@ -34,7 +34,7 @@ char *test_tm_pool_new(){
         mu_assert(pool->pointers[i].size == 0, "pool ptrs size");
         mu_assert(pool->pointers[i].ptr == 0, "ptr");
     }
-    /*Pool_delete(pool);*/
+    Pool_del(pool);
     return NULL;
 }
 
@@ -70,6 +70,7 @@ char *test_tm_pool_alloc(){
             mu_assert(Pool_uint8_p(pool, indexes[i])[n] == n * 10, "alloc values stay consistent");
         }
     }
+    Pool_del(pool);
     return NULL;
 }
 
@@ -125,6 +126,7 @@ char *test_tm_pool_defrag_full(){
         j = Pool_alloc(pool, i*2);
         mu_assert(j == i, "defrag reget indexes");
     }
+    Pool_del(pool);
     return NULL;
 }
 

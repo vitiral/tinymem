@@ -56,8 +56,11 @@ typedef struct {
 #define Pool_location_set(pool, index, loc)     (Pool_location(pool, index) = loc)
 #define Pool_location_void(pool, loc)           ((void*)(pool)->pool + loc)    // pointer of location
 
-void            Pool_delete(Pool *pool);
 Pool*           Pool_new(tm_size size);
+#define Pool_del(pool)  do{                 \
+        if(pool->pool) free(pool->pool);    \
+        free(pool);                         \
+    } while(0)
 void*           Pool_void(Pool *pool, tm_index index);
 tm_index        Pool_alloc(Pool *pool, tm_size size);
 void            Pool_free(Pool *pool, tm_size size);

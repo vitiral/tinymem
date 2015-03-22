@@ -64,7 +64,6 @@ void bubble_sort(Pool *pool, tm_index *array, tm_index len){
  * ###  Pool Methods
  */
 
-
 Pool *Pool_new(tm_size size){
     tm_size i;
     // Malloc space we need
@@ -109,7 +108,7 @@ Pool *Pool_new(tm_size size){
 
     return pool;
 error:
-    /*Pool_delete(pool);*/
+    Pool_del(pool);
     return NULL;
 }
 
