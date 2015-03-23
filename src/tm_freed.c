@@ -1,3 +1,4 @@
+#include <stdio.h>
 #include "tm_freed.h"
 
 uint16_t LIA_new(Pool *pool){
@@ -55,13 +56,14 @@ tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
     uint8_t i, j;
     tm_index final_last_i;
     tm_index index = 0;
-    tm_index temp;
+    tm_index delete = false;
     tm_index uindex = *last;
     LinkedIndexArray *a = Pool_LIA(pool, uindex);
 
     if(not a) return 0;
     while(true){
         for(i=0; i<TM_FREED_BINSIZE; i++){
+            printf("i=%u\n", i);
             if(Pool_sizeof(pool, a->indexes[i]) == size){
                 index = a->indexes[i];
                 goto found;
@@ -76,11 +78,15 @@ tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
         }
     }
 found:
+    printf("found\n");
     if(uindex == *last){
+        printf("islast\n");
         // the index was found in the "last" array
         // we need to find it's final index location
-        for(j=i; (j<TM_FREED_BINSIZE) or (not a->indexes[j+1]); j++);
+        for(j=i; (j<TM_FREED_BINSIZE) and (a->indexes[j]); j++);
         final_last_i = j - 1;
+        printf("flast=%u\n", final_last_i);
+        if(not final_last_i) delete = true;
     }
     j = final_last_i;
 
@@ -92,10 +98,15 @@ found:
     a->indexes[i] = j;
 
     // If the *last array is empty, delete it
-    if(not j){
-        temp = *last;
-        *last = Pool_LIA(pool, temp)->prev;
-        LIA_del(pool, temp);
+    printf("delete=%u\n", delete);
+    if(delete){
+        printf("deleting\n");
+        delete = *last;
+        *last = Pool_LIA(pool, delete)->prev;
+        LIA_del(pool, delete);
+    }
+    else{
+        printf("not deleting\n");
     }
 
     return index;
