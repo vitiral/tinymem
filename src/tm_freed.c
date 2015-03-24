@@ -1,6 +1,37 @@
 #include <stdio.h>
 #include "tm_freed.h"
 
+/* Freed Array methods for Pool
+ */
+
+#define HASH_PRIME 1677619
+
+
+// Designed to create an ultra fast hash with < 256 bins
+// see scripts/hash.py for more details and tests (hash4)
+uint8_t freed_hash(tm_index value){
+    uint32_t h = value * HASH_PRIME;
+    return ((h>>16) xor (h & 0xFFFF)) % TM_FREED_BINS;
+}
+
+
+bool Pool_freed_append(Pool *pool, tm_index index){
+    // Indicate that index was freed to freed arrays
+    uint8_t findex = freed_hash(Pool_sizeof(pool, index));
+    return LIA_append(pool, &(pool->freed[findex]), index);
+}
+
+
+tm_index Pool_freed_getsize(Pool *pool, tm_size size){
+    // Indicate that index was freed to freed arrays
+    uint8_t findex = freed_hash(size);
+    return LIA_pop(pool, &(pool->freed[findex]), size);
+}
+
+
+/* Linked Index Array Methods
+ */
+
 uint16_t LIA_new(Pool *pool){
     uint8_t i;
     LinkedIndexArray *a;
@@ -73,8 +104,12 @@ tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
             // index wasn't found, try previous array
             if(uindex == *last) final_last_i = i;  // will be used later
             uindex = a->prev;
+            printf("going to prev: %u\n", uindex);
             a = Pool_LIA(pool, uindex);
-            if(not a) return 0;
+            if(not a){
+                printf("no prev, return 0\n");
+                return 0;
+            }
         }
     }
 found:

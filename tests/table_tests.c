@@ -194,7 +194,7 @@ char *test_tm_free_foundation(){
     mu_assert(result == 42, "free f -- pop1");  // get value of size 4
     mu_assert(pool->uheap == sizeof(LinkedIndexArray), "free f -- heap doesn't change");
     mu_assert(Pool_ustack_used(pool) == 2, "free f -- freed is stored");
-    mu_assert(Pool_upool_get(pool, pool->stack / 2) == 0, "free f -- freed index is stored");
+    mu_assert(Pool_upool_get_index(pool, pool->stack / 2) == 0, "free f -- freed index is stored");
 
     mu_assert(LIA_append(pool, &lray, 42), "free f sanity");
     mu_assert(LIA_append(pool, &lray, 37), "free f sanity");
@@ -208,14 +208,49 @@ char *test_tm_free_foundation(){
     return NULL;
 }
 
+char *test_tm_free_basic(){
+    int8_t i;
+    Pool *pool = Pool_new(60000);
+    tm_index indexes[100];
+    tm_index index;
+    mu_assert(pool, "fbasic sanity");
+
+    // allocate a bunch of memory, then free chunks of it.
+    // Then allocate it again, making sure the heap doesn't change
+    for(i=0; i<100; i++){
+        indexes[i] = Pool_alloc(pool, i+1);
+        mu_assert(indexes[i], "fbasic alloc");
+        // TODO: load values
+    }
+    mu_assert(pool->heap == 5050 + 1, "fbasic heap1");
+    for(i=2; i<100; i+=2){ // free the even ones
+        Pool_free(pool, indexes[i]);
+    }
+
+    mu_assert(pool->heap == 5050 + 1, "fbasic heap2"); // heap doesn't change
+
+    for(i=98; i>0; i-=2){   // allocate the even ones again (in reverse order)
+        indexes[i] = Pool_alloc(pool, i);
+        mu_assert(indexes[i], "fbasic alloc2");
+    }
+
+    printf("heap=%u\n", pool->heap);
+    mu_assert(pool->heap == 5050 + 1, "fbasic heap3"); // heap still hasn't changed
+
+    index = Pool_alloc(pool, 4);
+    mu_assert(pool->heap == 5050 + 1 + 4, "fbasic heap4"); // heap still hasn't changed
+
+}
+
 char *all_tests(){
     mu_suite_start();
 
-    /*mu_run_test(test_tm_pool_new);*/
-    /*mu_run_test(test_tm_pool_alloc);*/
-    /*mu_run_test(test_tm_pool_defrag_full);*/
-    /*mu_run_test(test_upool_basic);*/
+    mu_run_test(test_tm_pool_new);
+    mu_run_test(test_tm_pool_alloc);
+    mu_run_test(test_tm_pool_defrag_full);
+    mu_run_test(test_upool_basic);
     mu_run_test(test_tm_free_foundation);
+    mu_run_test(test_tm_free_basic);
     return NULL;
 }
 

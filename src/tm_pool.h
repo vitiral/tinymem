@@ -68,14 +68,18 @@ void*           Pool_void(Pool *pool, tm_index index);
 tm_index        Pool_alloc(Pool *pool, tm_size size);
 void            Pool_free(Pool *pool, tm_size size);
 
-/* uPool allocation and freeing. Used for internal methods */
+/* upool allocation and freeing. Used for internal methods */
 tm_index Pool_ualloc(Pool *pool, tm_size size);
 void Pool_ufree(Pool *pool, tm_index index);
 void *Pool_uvoid(Pool *pool, tm_index index);
-#define Pool_upool_get(pool, index)  (((tm_index *)((pool)->upool))[index])
-#define Pool_upool_set(pool, index, value)  (((tm_index *)((pool)->upool))[index] = value)
+#define Pool_upool_get_index(pool, index)  (((tm_index *)((pool)->upool))[index])
+#define Pool_upool_set_index(pool, index, value)  (((tm_index *)((pool)->upool))[index] = value)
 #define Pool_uheap_left(pool)           (pool->ustack - pool->uheap)
 #define Pool_ustack_used(pool)          (TM_UPOOL_SIZE - pool->ustack)
+
+/* Special methods for freed arrays */
+void Pool_upool_clear(Pool *pool);
+void Pool_freed_reset(Pool *pool);
 
 /* Data types */
 #define Pool_uint8_p(pool, index)       ((uint8_t *)Pool_void(pool, index))
