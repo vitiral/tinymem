@@ -87,14 +87,14 @@ tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
     uint8_t i, j;
     tm_index final_last_i;
     tm_index index = 0;
-    tm_index delete = false;
+    tm_index temp;
     tm_index uindex = *last;
     LinkedIndexArray *a = Pool_LIA(pool, uindex);
 
     if(not a) return 0;
     while(true){
         for(i=0; i<TM_FREED_BINSIZE; i++){
-            printf("i=%u\n", i);
+            /*printf("i=%u\n", i);*/
             if(Pool_sizeof(pool, a->indexes[i]) == size){
                 index = a->indexes[i];
                 goto found;
@@ -104,7 +104,7 @@ tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
             // index wasn't found, try previous array
             if(uindex == *last) final_last_i = i;  // will be used later
             uindex = a->prev;
-            printf("going to prev: %u\n", uindex);
+            /*printf("going to prev: %u\n", uindex);*/
             a = Pool_LIA(pool, uindex);
             if(not a){
                 printf("no prev, return 0\n");
@@ -113,35 +113,32 @@ tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
         }
     }
 found:
-    printf("found\n");
     if(uindex == *last){
-        printf("islast\n");
+        /*printf("islast\n");*/
         // the index was found in the "last" array
         // we need to find it's final index location
         for(j=i; (j<TM_FREED_BINSIZE) and (a->indexes[j]); j++);
         final_last_i = j - 1;
-        printf("flast=%u\n", final_last_i);
-        if(not final_last_i) delete = true;
+        /*printf("flast=%u\n", final_last_i);*/
     }
-    j = final_last_i;
 
     // "pop" the very last index value
-    final_last_i = Pool_LIA(pool, *last)->indexes[final_last_i];
-    Pool_LIA(pool, *last)->indexes[j] = 0;
+    temp = Pool_LIA(pool, *last)->indexes[final_last_i];
+    Pool_LIA(pool, *last)->indexes[final_last_i] = 0;
 
     // Put the popped value into the one being removed
-    a->indexes[i] = j;
+    a->indexes[i] = temp;
 
     // If the *last array is empty, delete it
-    printf("delete=%u\n", delete);
-    if(delete){
-        printf("deleting\n");
-        delete = *last;
-        *last = Pool_LIA(pool, delete)->prev;
-        LIA_del(pool, delete);
+    /*printf("delete=%u\n", delete);*/
+    if(not final_last_i){
+        /*printf("deleting\n");*/
+        final_last_i = *last;
+        *last = Pool_LIA(pool, final_last_i)->prev;
+        LIA_del(pool, final_last_i);
     }
     else{
-        printf("not deleting\n");
+        /*printf("not deleting\n");*/
     }
 
     return index;

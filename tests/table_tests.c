@@ -172,14 +172,10 @@ char *test_tm_free_foundation(){
     tm_index lray = TM_UPOOL_ERROR;
     Pool *pool = Pool_new(10);
     // Some fake pointers
-    pool->pointers[42] = (poolptr) {
-        .size = 4,
-        .ptr = 1
-    };
-    pool->pointers[37] = (poolptr) {
-        .size = 6,
-        .ptr = 1+4
-    };
+    pool->pointers[42] = (poolptr) {.size = 4, .ptr = 1};
+    pool->pointers[37] = (poolptr) {.size = 6, .ptr = 1+4};
+    pool->pointers[1] = (poolptr) {.size = 8, .ptr = 1+4+6};
+    pool->pointers[2] = (poolptr) {.size = 5, .ptr = 1+4+6+8};
     mu_assert(pool, "free foundation -- pool new");
     // append index 42 (size 4)
     printf("appending\n");
@@ -205,6 +201,21 @@ char *test_tm_free_foundation(){
     printf("result=%u\n", result);
     mu_assert(result == 42, "free f -- pop3");
 
+    // append a whole bunch of values
+    for(i=0; i<33; i++){
+        mu_assert(LIA_append(pool, &lray, 42), "free f sanity");
+        mu_assert(LIA_append(pool, &lray, 37), "free f sanity");
+        mu_assert(LIA_append(pool, &lray, 1), "free f sanity");
+        mu_assert(LIA_append(pool, &lray, 2), "free f sanity");
+    }
+
+    for(i=0; i<33; i++){
+        printf("popping i=%u\n", i);
+        mu_assert(LIA_pop(pool, &lray, 4) == 42, "free popping 42");
+        mu_assert(LIA_pop(pool, &lray, 6) == 37, "free popping 37");
+        mu_assert(LIA_pop(pool, &lray, 5) == 2, "free popping 2");
+        mu_assert(LIA_pop(pool, &lray, 8) == 1, "free popping 1");
+    }
     return NULL;
 }
 
