@@ -160,6 +160,7 @@ char *test_upool_basic(){
         m-=mchange;
     }
     m = 0;
+    Pool_del(pool);
     return NULL;
 }
 
@@ -209,6 +210,7 @@ char *test_tm_free_foundation(){
         mu_assert(LIA_pop(pool, &lray, 5) == 2, "free popping 2");
         mu_assert(LIA_pop(pool, &lray, 8) == 1, "free popping 1");
     }
+    Pool_del(pool);
     return NULL;
 }
 
@@ -261,6 +263,7 @@ char *test_tm_free_basic(){
     index = Pool_alloc(pool, 4);
     heap += 4;
     mu_assert(pool->heap == heap, "fbasic heap4"); // heap finally changes
+    Pool_del(pool);
     return NULL;
 }
 
