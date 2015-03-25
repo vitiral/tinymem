@@ -222,6 +222,7 @@ char *test_tm_free_foundation(){
 char *test_tm_free_basic(){
     int8_t i;
     Pool *pool = Pool_new(60000);
+    tm_size heap;
     tm_index indexes[100];
     tm_index index;
     mu_assert(pool, "fbasic sanity");
@@ -233,16 +234,18 @@ char *test_tm_free_basic(){
         mu_assert(indexes[i], "fbasic alloc");
         // TODO: load values
     }
-    mu_assert(pool->heap == 5050 + 1, "fbasic heap1");
+    heap = 5050 + 1;
+    mu_assert(pool->heap == heap, "fbasic heap1");
     for(i=2; i<100; i+=2){ // free the even ones
         Pool_free(pool, indexes[i]);
     }
 
-    mu_assert(pool->heap == 5050 + 1, "fbasic heap2"); // heap doesn't change
+    mu_assert(pool->heap == heap, "fbasic heap2"); // heap doesn't change
 
     for(i=98; i>0; i-=2){   // allocate the even ones again (in reverse order)
         indexes[i] = Pool_alloc(pool, i);
         mu_assert(indexes[i], "fbasic alloc2");
+        mu_assert(pool->heap == heap, "fbasic heap cont"); // heap doesn't change
     }
 
     printf("heap=%u\n", pool->heap);
