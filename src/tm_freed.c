@@ -18,6 +18,7 @@ uint8_t freed_hash(tm_index value){
 bool Pool_freed_append(Pool *pool, tm_index index){
     // Indicate that index was freed to freed arrays
     uint8_t findex = freed_hash(Pool_sizeof(pool, index));
+    printf("# findex=%u\n", findex);
     return LIA_append(pool, &(pool->freed[findex]), index);
 }
 
@@ -61,7 +62,9 @@ bool LIA_append(Pool *pool, tm_index *last, tm_index value){
     tm_index uindex;
     LinkedIndexArray *a = Pool_LIA(pool, *last);
     if(a){  // if *last is ERROR/NULL, just create a new array
+        printf("using current array\n");
         for(i=0; i<TM_FREED_BINSIZE; i++){
+            printf("ap i=%u\n", i);
             if(not a->indexes[i]){
                 a->indexes[i] = value;
                 if(i<TM_FREED_BINSIZE - 1) a->indexes[i+1] = 0;
@@ -70,6 +73,7 @@ bool LIA_append(Pool *pool, tm_index *last, tm_index value){
         }
     }
     // data does not fit in this array, must allocate a new one
+    printf("allocating new. last=%u\n", *last);
     uindex = LIA_new(pool);
     if(uindex >= TM_UPOOL_ERROR) return false;
     a = Pool_LIA(pool, uindex);
@@ -77,6 +81,7 @@ bool LIA_append(Pool *pool, tm_index *last, tm_index value){
     a->indexes[0] = value;
     a->indexes[1] = 0;
     *last = uindex;
+    printf("allocated. last=%u\n", *last);
     return true;
 }
 

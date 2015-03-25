@@ -168,6 +168,7 @@ char *test_upool_basic(){
 char *test_tm_free_foundation(){
     printf("free foundation\n");
     int8_t i;
+    tm_size size;
     tm_index result;
     tm_index lray = TM_UPOOL_ERROR;
     Pool *pool = Pool_new(10);
@@ -220,9 +221,11 @@ char *test_tm_free_foundation(){
 }
 
 char *test_tm_free_basic(){
-    int8_t i;
+    int8_t i, j;
     Pool *pool = Pool_new(60000);
+    LinkedIndexArray *lia;
     tm_size heap;
+    tm_size temp;
     tm_index indexes[100];
     tm_index index;
     mu_assert(pool, "fbasic sanity");
@@ -236,24 +239,44 @@ char *test_tm_free_basic(){
     }
     heap = 5050 + 1;
     mu_assert(pool->heap == heap, "fbasic heap1");
+    j = 0;
+    printf("#### freeing\n");
     for(i=2; i<100; i+=2){ // free the even ones
+        printf("freeing %u\n", j/2);
         Pool_free(pool, indexes[i]);
+        j+=2;
     }
+    printf("Calculating freed\n");
+    temp=0;
+    for(i=0; i<TM_FREED_BINS; i++){
+        lia = Pool_LIA(pool, pool->freed[i]);
+        if(not lia) continue;
+        j = 0;
+        while(lia->indexes[j]){
+            j++;
+        }
+        temp+=j; // total number of freed elements
+    }
+    /*printf("actual=%u, expected=%u\n", Pool_ustack_used(pool), j/(TM_FREED_BINSIZE * 2));*/
+    printf("actual=%u, expected=%u\n", temp, 49);
+    mu_assert(temp == 49, "fbasic total freed");
 
     mu_assert(pool->heap == heap, "fbasic heap2"); // heap doesn't change
 
+    printf("#### allocating freed\n");
     for(i=98; i>0; i-=2){   // allocate the even ones again (in reverse order)
-        indexes[i] = Pool_alloc(pool, i);
+        printf("alloc freed i=%u\n", i);
+        mu_assert(Pool_sizeof(pool, indexes[i]) == i+1, "fbasic size");
+        mu_assert(freed_hash(Pool_sizeof(pool, indexes[i])) == freed_hash(i+1), "fbasic hash");
+        indexes[i] = Pool_alloc(pool, i+1);
         mu_assert(indexes[i], "fbasic alloc2");
-        mu_assert(pool->heap == heap, "fbasic heap cont"); // heap doesn't change
+        mu_assert(pool->heap == heap, "fbasic heap continuous"); // heap doesn't change
     }
 
-    printf("heap=%u\n", pool->heap);
-    mu_assert(pool->heap == 5050 + 1, "fbasic heap3"); // heap still hasn't changed
-
     index = Pool_alloc(pool, 4);
-    mu_assert(pool->heap == 5050 + 1 + 4, "fbasic heap4"); // heap still hasn't changed
-
+    heap += 4;
+    mu_assert(pool->heap == heap, "fbasic heap4"); // heap finally changes
+    return NULL;
 }
 
 char *all_tests(){
