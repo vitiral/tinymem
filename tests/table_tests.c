@@ -1,8 +1,8 @@
 #include "minunit.h"
 #include "tm_pool.h"
+#include "tm_freed.h"
 
 #define TABLE_STANDIN NULL
-
 
 
 char *test_tm_pool_new(){
@@ -104,7 +104,6 @@ char *test_tm_pool_defrag_full(){
     mu_assert(Pool_heap_left(pool) == size - 1 - calculated_use, "fdefrag heap left 2");
     mu_assert(Pool_available(pool) == size - 1 - 20200, "fdefrag available 2");
 
-    printf("Defraging\n");
     Pool_defrag_full(pool);
 
     mu_assert(Pool_heap_left(pool) == size - 20200 - 1, "fdefrag heap left 3");
@@ -130,6 +129,140 @@ char *test_tm_pool_defrag_full(){
     return NULL;
 }
 
+char *test_upool_basic(){
+    static int mchange = 32000 / 20;
+    int value;
+    int8_t i;
+    int m = 0;
+    tm_index index;
+    tm_index indexes[20];
+    Pool *pool = Pool_new(200);
+    mu_assert(pool, "upool basic");
+    for(i=0; i<20; i++){
+        indexes[i] = Pool_ualloc(pool, sizeof(int));
+        mu_assert(indexes[i] != TM_UPOOL_ERROR, "upool alloc");
+        *(int *)Pool_uvoid(pool, indexes[i]) = m;
+        mu_assert(*(int *)Pool_uvoid(pool, indexes[i]) == m, "upool sanity");
+        m += mchange;
+    }
+    for(i=1; i<20; i+=2){
+        Pool_ufree(pool, indexes[i]);
+    }
+    m-=mchange;
+    for(i=19; i>=1; i-=2){
+        index = Pool_ualloc(pool, sizeof(int));
+        mu_assert(index == indexes[i], "upool realloc");
+        mu_assert(*(int *)Pool_uvoid(pool, indexes[i]) == m, "upool basic value");
+        *(int *)Pool_uvoid(pool, indexes[i]) = m;
+        m-=mchange;
+        value = *(int *)Pool_uvoid(pool, indexes[i-1]);
+        mu_assert(value == m, "upool setting");
+        m-=mchange;
+    }
+    m = 0;
+    return NULL;
+}
+
+char *test_tm_free_foundation(){
+    int8_t i;
+    tm_size size;
+    tm_index result;
+    tm_index lray = TM_UPOOL_ERROR;
+    Pool *pool = Pool_new(10);
+    // Some fake pointers
+    pool->pointers[42] = (poolptr) {.size = 4, .ptr = 1};
+    pool->pointers[37] = (poolptr) {.size = 6, .ptr = 1+4};
+    pool->pointers[1] = (poolptr) {.size = 8, .ptr = 1+4+6};
+    pool->pointers[2] = (poolptr) {.size = 5, .ptr = 1+4+6+8};
+    mu_assert(pool, "free foundation -- pool new");
+    // append index 42 (size 4)
+    mu_assert(Pool_sizeof(pool, 37) == 6, "free f sanity");
+    mu_assert(Pool_sizeof(pool, 42) == 4, "free f sanity");
+
+    mu_assert(LIA_append(pool, &lray, 42), "free f -- appending");  // automatically creates new array
+    mu_assert(pool->uheap == sizeof(LinkedIndexArray), "free f -- did create");
+    result = LIA_pop(pool, &lray, 4);
+    mu_assert(result == 42, "free f -- pop1");  // get value of size 4
+    mu_assert(pool->uheap == sizeof(LinkedIndexArray), "free f -- heap doesn't change");
+    mu_assert(Pool_ustack_used(pool) == 2, "free f -- freed is stored");
+    mu_assert(Pool_upool_get_index(pool, pool->stack / 2) == 0, "free f -- freed index is stored");
+
+    mu_assert(LIA_append(pool, &lray, 42), "free f sanity");
+    mu_assert(LIA_append(pool, &lray, 37), "free f sanity");
+    mu_assert(pool->uheap == sizeof(LinkedIndexArray), "free f -- did not create");
+    mu_assert(Pool_ustack_used(pool) == 0, "free f -- removed from stack");
+    mu_assert(LIA_pop(pool, &lray, 6) == 37, "free f -- pop2");
+    result = LIA_pop(pool, &lray, 4);
+    mu_assert(result == 42, "free f -- pop3");
+
+    // append a whole bunch of values
+    for(i=0; i<33; i++){
+        mu_assert(LIA_append(pool, &lray, 42), "free f sanity");
+        mu_assert(LIA_append(pool, &lray, 37), "free f sanity");
+        mu_assert(LIA_append(pool, &lray, 1), "free f sanity");
+        mu_assert(LIA_append(pool, &lray, 2), "free f sanity");
+    }
+
+    for(i=0; i<33; i++){
+        mu_assert(LIA_pop(pool, &lray, 4) == 42, "free popping 42");
+        mu_assert(LIA_pop(pool, &lray, 6) == 37, "free popping 37");
+        mu_assert(LIA_pop(pool, &lray, 5) == 2, "free popping 2");
+        mu_assert(LIA_pop(pool, &lray, 8) == 1, "free popping 1");
+    }
+    return NULL;
+}
+
+char *test_tm_free_basic(){
+    int8_t i, j;
+    Pool *pool = Pool_new(60000);
+    LinkedIndexArray *lia;
+    tm_size heap;
+    tm_size temp;
+    tm_index indexes[100];
+    tm_index index;
+    mu_assert(pool, "fbasic sanity");
+
+    // allocate a bunch of memory, then free chunks of it.
+    // Then allocate it again, making sure the heap doesn't change
+    for(i=0; i<100; i++){
+        indexes[i] = Pool_alloc(pool, i+1);
+        mu_assert(indexes[i], "fbasic alloc");
+        // TODO: load values
+    }
+    heap = 5050 + 1;
+    mu_assert(pool->heap == heap, "fbasic heap1");
+    j = 0;
+    for(i=2; i<100; i+=2){ // free the even ones
+        Pool_free(pool, indexes[i]);
+        j+=2;
+    }
+    temp=0;
+    for(i=0; i<TM_FREED_BINS; i++){
+        lia = Pool_LIA(pool, pool->freed[i]);
+        if(not lia) continue;
+        j = 0;
+        while(lia->indexes[j]){
+            j++;
+        }
+        temp+=j; // total number of freed elements
+    }
+    mu_assert(temp == 49, "fbasic total freed");
+
+    mu_assert(pool->heap == heap, "fbasic heap2"); // heap doesn't change
+
+    for(i=98; i>0; i-=2){   // allocate the even ones again (in reverse order)
+        mu_assert(Pool_sizeof(pool, indexes[i]) == i+1, "fbasic size");
+        mu_assert(freed_hash(Pool_sizeof(pool, indexes[i])) == freed_hash(i+1), "fbasic hash");
+        indexes[i] = Pool_alloc(pool, i+1);
+        mu_assert(indexes[i], "fbasic alloc2");
+        mu_assert(pool->heap == heap, "fbasic heap continuous"); // heap doesn't change
+    }
+
+    index = Pool_alloc(pool, 4);
+    heap += 4;
+    mu_assert(pool->heap == heap, "fbasic heap4"); // heap finally changes
+    return NULL;
+}
 
 char *all_tests(){
     mu_suite_start();
@@ -137,6 +270,9 @@ char *all_tests(){
     mu_run_test(test_tm_pool_new);
     mu_run_test(test_tm_pool_alloc);
     mu_run_test(test_tm_pool_defrag_full);
+    mu_run_test(test_upool_basic);
+    mu_run_test(test_tm_free_foundation);
+    mu_run_test(test_tm_free_basic);
     return NULL;
 }
 
