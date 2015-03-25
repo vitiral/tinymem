@@ -103,7 +103,6 @@ char *test_tm_pool_defrag_full(){
     mu_assert(Pool_heap_left(pool) == size - 1 - calculated_use, "fdefrag heap left 2");
     mu_assert(Pool_available(pool) == size - 1 - 20200, "fdefrag available 2");
 
-    printf("Defraging\n");
     Pool_defrag_full(pool);
 
     mu_assert(Pool_heap_left(pool) == size - 20200 - 1, "fdefrag heap left 3");
@@ -147,7 +146,6 @@ char *test_upool_basic(){
     for(i=1; i<20; i+=2){
         Pool_ufree(pool, indexes[i]);
     }
-    printf("changing\n");
     m-=mchange;
     for(i=19; i>=1; i-=2){
         index = Pool_ualloc(pool, sizeof(int));
@@ -155,9 +153,7 @@ char *test_upool_basic(){
         mu_assert(*(int *)Pool_uvoid(pool, indexes[i]) == m, "upool basic value");
         *(int *)Pool_uvoid(pool, indexes[i]) = m;
         m-=mchange;
-        /*printf("i=%u, m=%u\n", i, m);*/
         value = *(int *)Pool_uvoid(pool, indexes[i-1]);
-        /*printf("value=%u\n", i);*/
         mu_assert(value == m, "upool setting");
         m-=mchange;
     }
@@ -166,7 +162,6 @@ char *test_upool_basic(){
 }
 
 char *test_tm_free_foundation(){
-    printf("free foundation\n");
     int8_t i;
     tm_size size;
     tm_index result;
@@ -179,15 +174,12 @@ char *test_tm_free_foundation(){
     pool->pointers[2] = (poolptr) {.size = 5, .ptr = 1+4+6+8};
     mu_assert(pool, "free foundation -- pool new");
     // append index 42 (size 4)
-    printf("appending\n");
     mu_assert(Pool_sizeof(pool, 37) == 6, "free f sanity");
     mu_assert(Pool_sizeof(pool, 42) == 4, "free f sanity");
 
     mu_assert(LIA_append(pool, &lray, 42), "free f -- appending");  // automatically creates new array
     mu_assert(pool->uheap == sizeof(LinkedIndexArray), "free f -- did create");
-    printf("popping\n");
     result = LIA_pop(pool, &lray, 4);
-    printf("result=%u\n", result);
     mu_assert(result == 42, "free f -- pop1");  // get value of size 4
     mu_assert(pool->uheap == sizeof(LinkedIndexArray), "free f -- heap doesn't change");
     mu_assert(Pool_ustack_used(pool) == 2, "free f -- freed is stored");
@@ -199,7 +191,6 @@ char *test_tm_free_foundation(){
     mu_assert(Pool_ustack_used(pool) == 0, "free f -- removed from stack");
     mu_assert(LIA_pop(pool, &lray, 6) == 37, "free f -- pop2");
     result = LIA_pop(pool, &lray, 4);
-    printf("result=%u\n", result);
     mu_assert(result == 42, "free f -- pop3");
 
     // append a whole bunch of values
@@ -211,7 +202,6 @@ char *test_tm_free_foundation(){
     }
 
     for(i=0; i<33; i++){
-        printf("popping i=%u\n", i);
         mu_assert(LIA_pop(pool, &lray, 4) == 42, "free popping 42");
         mu_assert(LIA_pop(pool, &lray, 6) == 37, "free popping 37");
         mu_assert(LIA_pop(pool, &lray, 5) == 2, "free popping 2");
@@ -240,13 +230,10 @@ char *test_tm_free_basic(){
     heap = 5050 + 1;
     mu_assert(pool->heap == heap, "fbasic heap1");
     j = 0;
-    printf("#### freeing\n");
     for(i=2; i<100; i+=2){ // free the even ones
-        printf("freeing %u\n", j/2);
         Pool_free(pool, indexes[i]);
         j+=2;
     }
-    printf("Calculating freed\n");
     temp=0;
     for(i=0; i<TM_FREED_BINS; i++){
         lia = Pool_LIA(pool, pool->freed[i]);
@@ -257,15 +244,11 @@ char *test_tm_free_basic(){
         }
         temp+=j; // total number of freed elements
     }
-    /*printf("actual=%u, expected=%u\n", Pool_ustack_used(pool), j/(TM_FREED_BINSIZE * 2));*/
-    printf("actual=%u, expected=%u\n", temp, 49);
     mu_assert(temp == 49, "fbasic total freed");
 
     mu_assert(pool->heap == heap, "fbasic heap2"); // heap doesn't change
 
-    printf("#### allocating freed\n");
     for(i=98; i>0; i-=2){   // allocate the even ones again (in reverse order)
-        printf("alloc freed i=%u\n", i);
         mu_assert(Pool_sizeof(pool, indexes[i]) == i+1, "fbasic size");
         mu_assert(freed_hash(Pool_sizeof(pool, indexes[i])) == freed_hash(i+1), "fbasic hash");
         indexes[i] = Pool_alloc(pool, i+1);

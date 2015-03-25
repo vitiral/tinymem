@@ -163,7 +163,6 @@ tm_index Pool_find_index(Pool *pool){
 tm_index Pool_alloc(Pool *pool, tm_index size){
     tm_index index = Pool_freed_getsize(pool, size);
     if(index) return index;
-    printf("wasn't able to reuse memory\n");
 
     if(size > Pool_heap_left(pool)) return 0;  // TODO: set defrag flag
     // find an unused index
@@ -210,7 +209,6 @@ tm_index Pool_defrag_full(Pool *pool){
         return 0;
     }
 
-    printf("sorting...\n");
     heap_sort(pool, (tm_index *)pool->upool, len);  // kind of a pun, sorting the heap... haha
 
     // we now have sorted indexes by location. We just need to
@@ -218,7 +216,6 @@ tm_index Pool_defrag_full(Pool *pool){
     // First memory can be moved to loc 1
     index = Pool_upool_get_index(pool, 0);
     // memmove(to, from, size)
-    printf("moving...\n");
     memmove(Pool_location_void(pool, 1), Pool_void(pool, index), Pool_sizeof(pool, index));
     Pool_location_set(pool, index, 1);
     pool->used_bytes += Pool_sizeof(pool, index);
@@ -251,11 +248,9 @@ tm_index Pool_ualloc(Pool *pool, tm_size size){
     // The upool ASSUMES that all blocks are the same size. Make sure this is always true.
     tm_index location;
 
-    /*printf("u_used=%u\n", Pool_ustack_used(pool));*/
     if(Pool_ustack_used(pool)) {
         // free pointers available
         location = Pool_upool_get_index(pool, pool->ustack / 2);
-        /*printf("free location=%u\n", location);*/
         pool->ustack += 2;
         return location;
     }
