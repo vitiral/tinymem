@@ -51,5 +51,15 @@ void tmfree(tm_index index);
  */
 inline void *tm_void(tm_index index);
 
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           data type conversion macros
+ * \param index     valid tm_index
+ * \return          pointer of type specified
+ */
+#define tm_int8_p(index)        ((int8_t *)tm_void(index))
+#define tm_uint8_p(index)       ((uint8_t *)tm_void(index))
+#define tm_int16_p(index)       ((int16_t *)tm_void(index))
+#define tm_uint16_p(index)      ((uint16_t *)tm_void(index))
 #endif
 
