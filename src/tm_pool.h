@@ -3,20 +3,25 @@
 #include <stdlib.h>
 #include "tm_types.h"
 #define TM_POOL_SIZE            ((uint16_t)(0xFFFFFFFF - 1))
+#define TM_UPOOL_SIZE           (TM_MAX_POOL_PTRS * sizeof(tm_index))
+#define TM_UPOOL_ERROR          (TM_UPOOL_SIZE + 1)
 #define TM_FREED_BINS           (16)
+#define TM_FREED_BINS_DECLARE   {TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR,  \
+                                 TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR,  \
+                                 TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR,  \
+                                 TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR}
+
 #define TM_FREED_BINSIZE        (14)
 
 #define TM_MAX_POOL_PTRS        (254)
 #define TM_MAX_FILLED_PTRS      (TM_MAX_POOL_PTRS / 8 + (TM_MAX_POOL_PTRS % 8 ? 1:0))
 #define TM_MAX_FILLED_INT       (TM_MAX_FILLED_PTRS / sizeof(int) + \
                                     ((TM_MAX_FILLED_PTRS % sizeof(int)) ? 1:0))
-#define TM_UPOOL_SIZE           (TM_MAX_POOL_PTRS * sizeof(tm_index))
 #define INTBITS                 (sizeof(int) * 8)
 #define MAXUINT                 ((unsigned int) 0xFFFFFFFFFFFFFFFF)
 #define NULL_poolptr            ((poolptr){.size=0, .ptr=0})
 #define TM_LAST_USED            ((uint8_t) (~(0x00FF >> (TM_MAX_POOL_PTRS % 8))))
 
-#define TM_UPOOL_ERROR          (TM_UPOOL_SIZE + 1)
 
 typedef struct {
     tm_size size;
@@ -43,6 +48,22 @@ typedef struct {
     tm_index freed[TM_FREED_BINS];      // binned storage of all freed indexes
     uint8_t pool[TM_POOL_SIZE];         // pool location in memory
 } Pool;
+
+#define Pool_declare()  (Pool) {        \
+    .heap = 1,                          \
+    .stack = TM_POOL_SIZE,              \
+    .used_bytes = 1,                    \
+    .used_pointers = 1,                 \
+    .filled_index = 0,                  \
+    .points_index = 0,                  \
+    .uheap = 0,                         \
+    .ustack = TM_UPOOL_SIZE,            \
+    .filled = {0},                      \
+    .points = {1},                      \
+    .pointers = {{1, 0}},               \
+    .upool = {0},                       \
+    .freed = TM_FREED_BINS_DECLARE,     \
+}
 
 #define Pool_available(pool)            (TM_POOL_SIZE - (pool)->used_bytes)
 #define Pool_pointers_left(pool)        (TM_MAX_POOL_PTRS - (pool)->used_poin%ters)

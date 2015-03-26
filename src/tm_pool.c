@@ -69,39 +69,10 @@ Pool *Pool_new(){
     tm_size i;
     // Malloc space we need
     Pool *pool = malloc(sizeof(Pool));
-    check_mem(pool);
-    *pool = (Pool) {
-        .heap = 1,              // 0 == NULL
-        .stack = TM_POOL_SIZE,
-        .used_bytes = 1,
-        .used_pointers = 1,
-        .filled_index = 0,
-        .points_index = 0,
-        .uheap = 0,
-        .ustack = TM_UPOOL_SIZE,
-    };
-
-    // Index 0 is NULL and taken
-    pool->filled[0] = 0;        // it has no data in it to prevent deallocation from caring about it
-    pool->points[0] = 1;          // but it is "used_bytes". This prevents it from being used by any user value
-    pool->pointers[0] = (poolptr){.size=1, .ptr=0};
-    *(pool->pool) = 0;             // This should NEVER change (for diagnostics)
-
-
-    // default values for everything else
-    for(i=1; i<TM_MAX_POOL_PTRS; i++){
-        pool->pointers[i] = NULL_poolptr;
-    }
-    for(i=1; i<TM_MAX_FILLED_PTRS - 1; i++){
-        pool->filled[i] = 0;
-    }
-    pool->filled[TM_MAX_FILLED_PTRS - 1] = 0; // filled is 0 so deallocate ignores them
-
+    if(!pool) return NULL;
+    *pool = Pool_declare();
     Pool_freed_reset(pool);
     return pool;
-error:
-    Pool_del(pool);
-    return NULL;
 }
 
 
