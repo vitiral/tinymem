@@ -111,7 +111,7 @@ char *test_tm_pool_defrag_full(){
     mu_assert(pool->used_pointers == 101, "defrag ptrs used 3");
     c = 0;
     for(i=1; i<201; i++){
-        if(not i%2){
+        if(! i%2){
             mu_assert(Pool_sizeof(pool, i) == i*2, "defrag size");
             for(j=0;j<i;j++){
                 mu_assert(Pool_uint16_p(pool, data[i])[j] == c, "defrag data inconcistency");
@@ -241,7 +241,7 @@ char *test_tm_free_basic(){
     temp=0;
     for(i=0; i<TM_FREED_BINS; i++){
         lia = Pool_LIA(pool, pool->freed[i]);
-        if(not lia) continue;
+        if(!lia) continue;
         j = 0;
         while(lia->indexes[j]){
             j++;

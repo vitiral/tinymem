@@ -56,7 +56,7 @@ void bubble_sort(Pool *pool, tm_index *array, tm_index len){
                 workdone = true;
             }
         }
-        if(not workdone) break; // no values were moved, list is sorted
+        if(! workdone) break; // no values were moved, list is sorted
     }
 }
 
@@ -131,9 +131,9 @@ void Pool_freed_reset(Pool *pool){
 void *Pool_void(Pool *pool, tm_index index){
     // get a void pointer to data from pool index.
     tm_size location;
-    if(not index) return NULL;
+    if(! index) return NULL;
     location = Pool_location(pool, index);
-    if(not location) return NULL;
+    if(! location) return NULL;
     /*return pool->pool + location;*/
     return Pool_location_void(pool, location);
 }
@@ -147,7 +147,7 @@ tm_index Pool_find_index(Pool *pool){
             // There is an empty value
             bit = 1;
             for(b=0; b<INTBITS; b++){
-                if(not (points[i] bitand bit)){
+                if(! (points[i] & bit)){
                     index = i * INTBITS + b;
                     return index;
                 }
@@ -166,7 +166,7 @@ tm_index Pool_alloc(Pool *pool, tm_index size){
     if(size > Pool_heap_left(pool)) return 0;  // TODO: set defrag flag
     // find an unused index
     index = Pool_find_index(pool);
-    if(not index) return 0;
+    if(! index) return 0;
     Pool_filled_set(pool, index);
     Pool_points_set(pool, index);
     pool->pointers[index] = (poolptr) {.size = size, .ptr = pool->heap};
@@ -196,14 +196,14 @@ tm_index Pool_defrag_full(Pool *pool){
     // else in the upool
     Pool_upool_clear(pool);
 
-    // Move used indexes into upool and sort them
+    // Move used indexes into upool andand sort them
     for(index=0; index<TM_MAX_POOL_PTRS; index++){
         if(Pool_filled_bool(pool, index)){
             Pool_upool_set_index(pool, len, index);
             len++;
         }
     }
-    if(not len){
+    if(! len){
         pool->heap = 1;
         return 0;
     }

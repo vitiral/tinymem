@@ -11,7 +11,7 @@
 // see scripts/hash.py for more details and tests (hash4)
 uint8_t freed_hash(tm_index value){
     uint32_t h = value * HASH_PRIME;
-    return ((h>>16) xor (h & 0xFFFF)) % TM_FREED_BINS;
+    return ((h>>16) ^ (h & 0xFFFF)) % TM_FREED_BINS;
 }
 
 
@@ -36,7 +36,7 @@ uint16_t LIA_new(Pool *pool){
     uint8_t i;
     LinkedIndexArray *a;
     tm_index uindex = Pool_ualloc(pool, sizeof(LinkedIndexArray));
-    if(not uindex) return 0;
+    if(! uindex) return 0;
     a = Pool_LIA(pool, uindex);
     a->prev = TM_UPOOL_ERROR + 1;
     for(i=0; i<TM_FREED_BINSIZE; i++){
@@ -62,7 +62,7 @@ bool LIA_append(Pool *pool, tm_index *last, tm_index value){
     LinkedIndexArray *a = Pool_LIA(pool, *last);
     if(a){  // if *last is ERROR/NULL, just create a new array
         for(i=0; i<TM_FREED_BINSIZE; i++){
-            if(not a->indexes[i]){
+            if(! a->indexes[i]){
                 a->indexes[i] = value;
                 if(i<TM_FREED_BINSIZE - 1) a->indexes[i+1] = 0;
                 return true;
@@ -91,7 +91,7 @@ tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
     tm_index uindex = *last;
     LinkedIndexArray *a = Pool_LIA(pool, uindex);
 
-    if(not a) return 0;
+    if(! a) return 0;
     while(true){
         for(i=0; i<TM_FREED_BINSIZE; i++){
             if(Pool_sizeof(pool, a->indexes[i]) == size){
@@ -99,12 +99,12 @@ tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
                 goto found;
             }
         }
-        if(not index){
+        if(! index){
             // index wasn't found, try previous array
             if(uindex == *last) final_last_i = i;  // will be used later
             uindex = a->prev;
             a = Pool_LIA(pool, uindex);
-            if(not a){
+            if(! a){
                 return 0;
             }
         }
@@ -113,7 +113,7 @@ found:
     if(uindex == *last){
         // the index was found in the "last" array
         // we need to find it's final index location
-        for(j=i; (j<TM_FREED_BINSIZE) and (a->indexes[j]); j++);
+        for(j=i; (j<TM_FREED_BINSIZE) && (a->indexes[j]); j++);
         final_last_i = j - 1;
     }
 
@@ -125,7 +125,7 @@ found:
     a->indexes[i] = temp;
 
     // If the *last array is empty, delete it
-    if(not final_last_i){
+    if(! final_last_i){
         final_last_i = *last;
         *last = Pool_LIA(pool, final_last_i)->prev;
         LIA_del(pool, final_last_i);

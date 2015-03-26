@@ -50,12 +50,12 @@ typedef struct {
 #define Pool_heap_left(pool)            (pool->stack - pool->heap)
 #define Pool_filled_index(index)        (index / 8)
 #define Pool_filled_bit(index)          (1 << (index % 8))
-#define Pool_filled_bool(pool, index)   ((pool)->filled[Pool_filled_index(index)] bitand Pool_filled_bit(index))
+#define Pool_filled_bool(pool, index)   ((pool)->filled[Pool_filled_index(index)] & Pool_filled_bit(index))
 #define Pool_filled_set(pool, index)    ((pool)->filled[Pool_filled_index(index)] |=  Pool_filled_bit(index))
 #define Pool_filled_clear(pool, index)  ((pool)->filled[Pool_filled_index(index)] &= ~Pool_filled_bit(index))
-#define Pool_points_bool(pool, index)   ((pool)->points[Pool_filled_index(index)] bitand Pool_filled_bit(index))
-#define Pool_points_set(pool, index)    ((pool)->points[Pool_filled_index(index)]   |=  Pool_filled_bit(index))
-#define Pool_points_clear(pool, index)  ((pool)->points[Pool_filled_index(index)]   &= ~Pool_filled_bit(index))
+#define Pool_points_bool(pool, index)   ((pool)->points[Pool_filled_index(index)] & Pool_filled_bit(index))
+#define Pool_points_set(pool, index)    ((pool)->points[Pool_filled_index(index)] |=  Pool_filled_bit(index))
+#define Pool_points_clear(pool, index)  ((pool)->points[Pool_filled_index(index)] &= ~Pool_filled_bit(index))
 #define Pool_sizeof(pool, index)        ((pool)->pointers[index].size) // get size of data at index
 
 #define Pool_location(pool, index)              ((pool)->pointers[index].ptr)  // location of pointer inside pool
