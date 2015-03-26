@@ -65,15 +65,14 @@ void bubble_sort(Pool *pool, tm_index *array, tm_index len){
  * ###  Pool Methods
  */
 
-Pool *Pool_new(tm_size size){
+Pool *Pool_new(){
     tm_size i;
     // Malloc space we need
     Pool *pool = malloc(sizeof(Pool));
     check_mem(pool);
     *pool = (Pool) {
-        .size = size,
         .heap = 1,              // 0 == NULL
-        .stack = size,          // size - 1???
+        .stack = TM_POOL_SIZE,
         .used_bytes = 1,
         .used_pointers = 1,
         .filled_index = 0,
@@ -81,8 +80,6 @@ Pool *Pool_new(tm_size size){
         .uheap = 0,
         .ustack = TM_UPOOL_SIZE,
     };
-    pool->pool = malloc(size);
-    check_mem(pool->pool);
 
     // Index 0 is NULL and taken
     pool->filled[0] = 0;        // it has no data in it to prevent deallocation from caring about it
