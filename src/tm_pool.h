@@ -2,6 +2,16 @@
 #define __mempool_h_
 #include <stdlib.h>
 #include "tm_types.h"
+
+// Pool Statuses (kept at pool->pool[0])
+#define TM_DEFRAG_FULL  (1<<0)  // a full defrag has been requested
+#define TM_DEFRAG       (1<<1)  // a fast defrag has been requested
+#define TM_DEFRAG_IP    (1<<2)  // A defrag is in progress
+#define TM_MOVING       (1<<3)  // the memory manager is currently moving a block
+#define TM_ERROR        (1<<7)  // a memory manager internal error occurred
+
+#define TM_ANY_DEFRAG   (TM_DEFRAG_FULL | TM_DEFRAG | TM_DEFRAG_IP)   // some defrag has been requested
+
 #define TM_POOL_SIZE            ((uint16_t)(0xFFFFFFFF - 1))
 #define TM_UPOOL_SIZE           (TM_MAX_POOL_PTRS * sizeof(tm_index))
 #define TM_UPOOL_ERROR          (TM_UPOOL_SIZE + 1)
@@ -49,7 +59,7 @@ typedef struct {
     uint8_t pool[TM_POOL_SIZE];         // pool location in memory
 } Pool;
 
-#define Pool_declare()  (Pool) {        \
+#define Pool_declare()  ((Pool) {        \
     .heap = 1,                          \
     .stack = TM_POOL_SIZE,              \
     .used_bytes = 1,                    \
@@ -63,10 +73,10 @@ typedef struct {
     .pointers = {{1, 0}},               \
     .upool = {0},                       \
     .freed = TM_FREED_BINS_DECLARE,     \
-}
+})
 
 #define Pool_available(pool)            (TM_POOL_SIZE - (pool)->used_bytes)
-#define Pool_pointers_left(pool)        (TM_MAX_POOL_PTRS - (pool)->used_poin%ters)
+#define Pool_pointers_left(pool)        (TM_MAX_POOL_PTRS - (pool)->used_pointers)
 #define Pool_heap_left(pool)            (pool->stack - pool->heap)
 #define Pool_filled_index(index)        (index / 8)
 #define Pool_filled_bit(index)          (1 << (index % 8))
@@ -77,6 +87,15 @@ typedef struct {
 #define Pool_points_set(pool, index)    ((pool)->points[Pool_filled_index(index)] |=  Pool_filled_bit(index))
 #define Pool_points_clear(pool, index)  ((pool)->points[Pool_filled_index(index)] &= ~Pool_filled_bit(index))
 #define Pool_sizeof(pool, index)        ((pool)->pointers[index].size) // get size of data at index
+#define Pool_status(pool, name)         ((pool)->pool[0] & (name))
+#define Pool_status_set(pool, name)     ((pool)->pool[0] |= (name))
+#define Pool_status_clear(pool, name)   ((pool)->pool[0] &= ~(name))
+#define Pool_memmove(pool, index_to, index_from)  memmove(              \
+            Pool_void(pool, index_to) + Pool_sizeof(pool, index_to),    \
+            Pool_void(pool, index_from),                                \
+            Pool_sizeof(pool, index_from)                               \
+        )
+
 
 #define Pool_location(pool, index)              ((pool)->pointers[index].ptr)  // location of pointer inside pool
 #define Pool_location_set(pool, index, loc)     (Pool_location(pool, index) = loc)
@@ -84,14 +103,15 @@ typedef struct {
 
 Pool*           Pool_new();
 #define Pool_del(pool)  (free(pool))
-void*           Pool_void(Pool *pool, tm_index index);
+inline void*    Pool_void(Pool *pool, tm_index index);
 tm_index        Pool_alloc(Pool *pool, tm_size size);
 void            Pool_free(Pool *pool, tm_size size);
+bool            Pool_defrag_full(Pool *pool);
 
 /* upool allocation and freeing. Used for internal methods */
 tm_index Pool_ualloc(Pool *pool, tm_size size);
-void Pool_ufree(Pool *pool, tm_index index);
-void *Pool_uvoid(Pool *pool, tm_index index);
+bool Pool_ufree(Pool *pool, tm_index index);
+inline void *Pool_uvoid(Pool *pool, tm_index index);
 #define Pool_upool_get_index(pool, index)  (((tm_index *)((pool)->upool))[index])
 #define Pool_upool_set_index(pool, index, value)  (((tm_index *)((pool)->upool))[index] = value)
 #define Pool_uheap_left(pool)           (pool->ustack - pool->uheap)

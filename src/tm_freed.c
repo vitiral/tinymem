@@ -46,9 +46,12 @@ uint16_t LIA_new(Pool *pool){
 }
 
 
-void LIA_del(Pool *pool, tm_index uindex){
+bool LIA_del(Pool *pool, tm_index uindex){
     Pool_LIA(pool, uindex)->prev = TM_UPOOL_ERROR;
-    Pool_ufree(pool, uindex);
+    if(!Pool_ufree(pool, uindex)){
+        return false;
+    }
+    return true;
 }
 
 
@@ -59,6 +62,11 @@ bool LIA_append(Pool *pool, tm_index *last, tm_index value){
     // because free values will be lost otherwise!
     uint8_t i;
     tm_index uindex;
+    if(Pool_status(pool, TM_ANY_DEFRAG)){
+        // TODO: for threading some very specific things need to happen here.
+        //      Everything is fine for simple
+        return false;
+    }
     LinkedIndexArray *a = Pool_LIA(pool, *last);
     if(a){  // if *last is ERROR/NULL, just create a new array
         for(i=0; i<TM_FREED_BINSIZE; i++){
@@ -71,7 +79,11 @@ bool LIA_append(Pool *pool, tm_index *last, tm_index value){
     }
     // data does not fit in this array, must allocate a new one
     uindex = LIA_new(pool);
-    if(uindex >= TM_UPOOL_ERROR) return false;
+    if(uindex >= TM_UPOOL_ERROR){
+        Pool_status_set(pool, TM_DEFRAG);
+        Pool_defrag_full(pool);  // TODO: simple implementation
+        return true;             // Also for simple only. It was freed because it was defraged
+    }
     a = Pool_LIA(pool, uindex);
     a->prev = *last;
     a->indexes[0] = value;
@@ -84,6 +96,9 @@ bool LIA_append(Pool *pool, tm_index *last, tm_index value){
 tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
     // Pops a value off of LIA that meets the size criteria
     // modifies *last if this action causes the last index to get deleted
+    if(Pool_status(pool, TM_ANY_DEFRAG)){
+        return 0;
+    }
     uint8_t i, j;
     tm_index final_last_i;
     tm_index index = 0;
@@ -128,7 +143,11 @@ found:
     if(! final_last_i){
         final_last_i = *last;
         *last = Pool_LIA(pool, final_last_i)->prev;
-        LIA_del(pool, final_last_i);
+        if(!LIA_del(pool, final_last_i)){
+            Pool_status_set(pool, TM_DEFRAG);
+            Pool_defrag_full(pool);  // TODO: simple implementation
+            return 0;
+        }
     }
     return index;
 }

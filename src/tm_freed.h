@@ -15,7 +15,7 @@ typedef struct {
 } LinkedIndexArray;
 
 tm_index    LIA_new(Pool *pool);
-void        LIA_del(Pool *pool, tm_index uindex);
+bool        LIA_del(Pool *pool, tm_index uindex);
 bool        LIA_append(Pool *pool, tm_index *last, tm_index value);
 tm_index    LIA_pop(Pool *pool, tm_index *last, tm_size size);
 

@@ -96,14 +96,10 @@ void Pool_freed_reset(Pool *pool){
     pool->points[i-1]   |= TM_LAST_USED;  // prevent use of values that don't exist
 }
 
-void *Pool_void(Pool *pool, tm_index index){
+inline void *Pool_void(Pool *pool, tm_index index){
     // get a void pointer to data from pool index.
-    tm_size location;
-    if(! index) return NULL;
-    location = Pool_location(pool, index);
-    if(! location) return NULL;
-    /*return pool->pool + location;*/
-    return Pool_location_void(pool, location);
+    if(!index) return NULL;
+    return Pool_location_void(pool, Pool_location(pool, index));
 }
 
 tm_index Pool_find_index(Pool *pool){
@@ -130,11 +126,32 @@ tm_index Pool_find_index(Pool *pool){
 tm_index Pool_alloc(Pool *pool, tm_index size){
     tm_index index = Pool_freed_getsize(pool, size);
     if(index) return index;
+    if(size > Pool_available(pool)) return 0;
 
-    if(size > Pool_heap_left(pool)) return 0;  // TODO: set defrag flag
+    if(size > Pool_heap_left(pool)){
+        Pool_status_set(pool, TM_DEFRAG);
+        // TODO: this is the "simplest" implementation.
+        //      Threading is going to be main one long term
+        Pool_defrag_full(pool);
+        if(size > Pool_heap_left(pool)){
+            Pool_status_set(pool, TM_ERROR);
+            return 0;
+        }
+    }
     // find an unused index
+    if(!Pool_pointers_left(pool)){
+        return 0;
+    }
     index = Pool_find_index(pool);
-    if(! index) return 0;
+    if(!index){
+        Pool_status_set(pool, TM_DEFRAG);
+        Pool_defrag_full(pool);  // TODO: simple implemntation
+        index = Pool_find_index(pool);
+        if((!Pool_pointers_left(pool)) || (!index)){
+            Pool_status_set(pool, TM_ERROR);
+            return 0;
+        }
+    }
     Pool_filled_set(pool, index);
     Pool_points_set(pool, index);
     pool->pointers[index] = (poolptr) {.size = size, .ptr = pool->heap};
@@ -153,9 +170,11 @@ void Pool_free(Pool *pool, tm_index index){
 }
 
 
-tm_index Pool_defrag_full(Pool *pool){
+bool Pool_defrag_full(Pool *pool){
     tm_index prev_index, index, i;
     tm_index len = 0;
+    Pool_status_set(pool, TM_DEFRAG_IP);
+    Pool_status_clear(pool, TM_DEFRAG | TM_DEFRAG_FULL);
 
     pool->used_bytes = 1;
     pool->used_pointers = 1;
@@ -173,7 +192,7 @@ tm_index Pool_defrag_full(Pool *pool){
     }
     if(! len){
         pool->heap = 1;
-        return 0;
+        return false;
     }
 
     heap_sort(pool, (tm_index *)pool->upool, len);  // kind of a pun, sorting the heap... haha
@@ -181,6 +200,7 @@ tm_index Pool_defrag_full(Pool *pool){
     // we now have sorted indexes by location. We just need to
     // move all memory to the left
     // First memory can be moved to loc 1
+    // TODO: use macro Pool_memmove(pool, to, from)
     index = Pool_upool_get_index(pool, 0);
     // memmove(to, from, size)
     memmove(Pool_location_void(pool, 1), Pool_void(pool, index), Pool_sizeof(pool, index));
@@ -205,7 +225,8 @@ tm_index Pool_defrag_full(Pool *pool){
 
     // heap can now move left
     pool->heap = Pool_location(pool, index) + Pool_sizeof(pool, index);
-    return;
+    Pool_status_clear(pool, TM_DEFRAG_IP);
+    return true;
 }
 
 
@@ -227,14 +248,17 @@ tm_index Pool_ualloc(Pool *pool, tm_size size){
 }
 
 
-void Pool_ufree(Pool *pool, tm_index location){
-    // TODO: if this can't work, mark flag for full defrag
+bool Pool_ufree(Pool *pool, tm_index location){
+    if(Pool_uheap_left(pool) < 2){
+        return false;
+    }
     pool->ustack-=2;
     Pool_upool_set_index(pool, pool->ustack / 2, location);
+    return true;
 }
 
 
-void *Pool_uvoid(Pool *pool, tm_index location){
+inline void *Pool_uvoid(Pool *pool, tm_index location){
     if(location >= TM_UPOOL_ERROR) return NULL;
     return pool->upool + location;
 }
