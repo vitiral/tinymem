@@ -2,6 +2,11 @@
  * \defgroup tinymem
  *
  * tinymem memory manager
+ *
+ * See the README.md at https://github.com/cloudformdesign/tinymem
+ * for more information
+ *
+ * Released under the MIT License
  * @{
  */
 
@@ -57,9 +62,13 @@ inline void *tm_void(tm_index index);
  * \param index     valid tm_index
  * \return          pointer of type specified
  */
+#define tm_char_p(index)        ((char *)tm_void(index))
 #define tm_int8_p(index)        ((int8_t *)tm_void(index))
 #define tm_uint8_p(index)       ((uint8_t *)tm_void(index))
 #define tm_int16_p(index)       ((int16_t *)tm_void(index))
 #define tm_uint16_p(index)      ((uint16_t *)tm_void(index))
+#define tm_int32_p(index)       ((int32_t *)tm_void(index))
+#define tm_uint32_p(index)      ((uint32_t *)tm_void(index))
 #endif
 
+/** @} */
