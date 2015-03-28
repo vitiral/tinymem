@@ -17,13 +17,19 @@
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Pool Configuration options
+ *                  define your own "tinymem_platform.h" and include it in your
+ *                  Makefile to select these options
+ *                  Or, link to one of the standard ones in the `platform`
+ *                  folder
  */
-#define TM_POOL_SIZE            ((uint16_t)(0xFFFFFFFF - 1))
+#include "tinymem_platform.h"
+
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           Internal Definitions based on platform
+ */
 #define TM_UPOOL_SIZE           (TM_MAX_POOL_PTRS * sizeof(tm_index))
 #define TM_UPOOL_ERROR          (TM_UPOOL_SIZE + 1)
-#define TM_FREED_BINS           (16)
-#define TM_FREED_BINSIZE        (14)
-#define TM_MAX_POOL_PTRS        (254)
 #define TM_MAX_FILLED_PTRS      (TM_MAX_POOL_PTRS / 8 + (TM_MAX_POOL_PTRS % 8 ? 1:0))
 #define TM_MAX_FILLED_INT       (TM_MAX_FILLED_PTRS / sizeof(int) + \
                                     ((TM_MAX_FILLED_PTRS % sizeof(int)) ? 1:0))
