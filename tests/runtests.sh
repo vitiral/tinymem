@@ -1,6 +1,6 @@
 echo "Running unit tests:"
 
-for i in tests/*_tests
+for i in tests/test*
 do
     if test -f $i
     then
@@ -8,7 +8,7 @@ do
         then
             echo $i PASS
         else
-            echo "ERROR in test $i: here's tests/tests.log"
+            echo "EROR in test $i: here's tests/tests.log"
             echo "------"
             tail tests/tests.log
             exit 1
