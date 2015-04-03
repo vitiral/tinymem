@@ -15,6 +15,7 @@ def get_sources(path):
 
 
 sources = get_sources('src')
+sources.append('platform/tinymem_platform.h')
 tests = get_sources('tests')
 tfiles = [t[:-2] for t in tests if t.endswith('.c')]
 
