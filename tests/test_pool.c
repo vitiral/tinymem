@@ -217,6 +217,8 @@ char *test_tm_free_basic(){
     int8_t i, j;
     Pool *pool = Pool_new();
     LinkedIndexArray *lia;
+    tm_index used_ptrs;
+    tm_index used_bytes;
     tm_size heap;
     tm_size temp;
     tm_index indexes[100];
@@ -225,9 +227,15 @@ char *test_tm_free_basic(){
 
     // allocate a bunch of memory, then free chunks of it.
     // Then allocate it again, making sure the heap doesn't change
+    used_ptrs = pool->used_pointers;
+    used_bytes = pool->used_bytes;
     for(i=0; i<100; i++){
         indexes[i] = Pool_alloc(pool, i+1);
         mu_assert(indexes[i], "fbasic alloc");
+        used_ptrs++;
+        used_bytes+=i+1;
+        mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+        mu_assert(used_bytes == pool->used_bytes, "used bytes");
         // TODO: load values
     }
     heap = 5050 + 1;
@@ -235,6 +243,10 @@ char *test_tm_free_basic(){
     j = 0;
     for(i=2; i<100; i+=2){ // free the even ones
         Pool_free(pool, indexes[i]);
+        used_ptrs--;
+        used_bytes-=i+1;
+        mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+        mu_assert(used_bytes == pool->used_bytes, "used bytes");
         j+=2;
     }
     temp=0;
@@ -257,6 +269,10 @@ char *test_tm_free_basic(){
         indexes[i] = Pool_alloc(pool, i+1);
         mu_assert(indexes[i], "fbasic alloc2");
         mu_assert(pool->heap == heap, "fbasic heap continuous"); // heap doesn't change
+        used_ptrs++;
+        used_bytes+=i+1;
+        mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+        mu_assert(used_bytes == pool->used_bytes, "used bytes");
     }
 
     index = Pool_alloc(pool, 4);

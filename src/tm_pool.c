@@ -124,7 +124,24 @@ tm_index Pool_find_index(Pool *pool){
 
 tm_index Pool_alloc(Pool *pool, tm_index size){
     tm_index index = Pool_freed_getsize(pool, size);
-    if(index) return index;
+    if(index){
+        if(!Pool_points_bool(pool, index)){
+            tmdebug("ERROR pointer should point, but be unfilled");
+            return 0;
+        }
+        if(Pool_filled_bool(pool, index)){
+            tmdebug("ERROR data in freed array should not be filled!");
+            return 0;
+        }
+        if(Pool_sizeof(pool, index) != size){
+            tmdebug("ERROR value is wrong size!");
+            return 0;
+        }
+        Pool_filled_set(pool, index);
+        pool->used_bytes += Pool_sizeof(pool, index);
+        pool->used_pointers++;
+        return index;
+    }
     if(size > Pool_available(pool)) return 0;
 
     if(size > Pool_heap_left(pool)){
