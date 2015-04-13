@@ -7,7 +7,8 @@
 #define mu_suite_start() char *message = NULL
 
 #define debug printf
-#define log_err printf
+#define log_err(...) do{printf("[ERROR](%s,%u):", __FILE__, __LINE__); printf(__VA_ARGS__); \
+    printf("\n");}while(0)
 
 #define mu_assert(test, message) if (!(test)) { log_err(message); return message; }
 #define mu_run_test(test) debug("\n-----%s ", " " #test); \
