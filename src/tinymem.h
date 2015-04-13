@@ -38,7 +38,7 @@ void tm_init();
  * \return          tm_index value. Use tm_void or other typecasts to convert
  *                  to useable pointer
  */
-tm_index tmalloc(tm_size size);
+inline tm_index tm_alloc(tm_size size);
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -46,7 +46,32 @@ tm_index tmalloc(tm_size size);
  * \param index     tm_index value to free
  * \return          void
  */
-void tmfree(tm_index index);
+inline void tm_free(tm_index index);
+
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           get sizeof the data referenced by index
+ * \param index     tm_index value
+ * \return          size of referenced data in bytes
+ */
+inline tm_size tm_sizeof(tm_index index);
+
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           return whether index points to valid data
+ * \param index     tm_index value
+ * \return          1 if it does, 0 if it does not
+ */
+inline bool tm_valid(tm_index index);
+
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           return status of poolid
+ * \param poolid    poolid is the first 4 bits of any tm_index, name is status
+ *                  bit name
+ * \return          status bits coresponding to name
+ */
+//inline uint8_t tm_status(tm_index poolid, uint8_t name);
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -69,6 +94,10 @@ inline void *tm_void(tm_index index);
 #define tm_uint16_p(index)      ((uint16_t *)tm_void(index))
 #define tm_int32_p(index)       ((int32_t *)tm_void(index))
 #define tm_uint32_p(index)      ((uint32_t *)tm_void(index))
+
+
+void tm_print_stats();
+
 #endif
 
 /** @} */
