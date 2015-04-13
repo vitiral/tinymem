@@ -28,6 +28,31 @@ tm_index Pool_freed_getsize(Pool *pool, tm_size size){
     return LIA_pop(pool, &(pool->freed[findex]), size);
 }
 
+bool Pool_freed_isvalid(Pool *pool){
+    tm_index bin, i;
+    tm_index index;
+    for(bin=0; bin<TM_FREED_BINS; bin++){
+        LinkedIndexArray *a = Pool_LIA(pool, pool->freed[bin]);
+        if(!a) continue;
+        for(i=0; i<TM_FREED_BINSIZE; i++){
+            // check that data is valid
+            index = a->indexes[i];
+            if(bin!=freed_hash(Pool_sizeof(pool, index))){
+                tmdebug("error: invalid hash");
+                return false;
+            }
+            if(Pool_filled_bool(pool, index)){
+                tmdebug("error: is filled");
+                return false;
+            }
+            if(!Pool_points_bool(pool, index)){
+                tmdebug("error: does not point");
+                return false;
+            }
+        }
+    }
+    return true;
+}
 
 /* Linked Index Array Methods
  */

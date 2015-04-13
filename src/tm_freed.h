@@ -6,6 +6,7 @@
 uint8_t     freed_hash(tm_index value);
 bool        Pool_freed_append(Pool *pool, tm_index index);
 tm_index    Pool_freed_getsize(Pool *pool, tm_size size);
+bool        Pool_freed_isvalid(Pool *pool);
 
 
 /* Linked Index Array Methods */
