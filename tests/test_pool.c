@@ -236,18 +236,21 @@ char *test_tm_free_basic(){
         used_bytes+=i+1;
         mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
         mu_assert(used_bytes == pool->used_bytes, "used bytes");
+        mu_assert(Pool_freed_isvalid(pool), "freed isvalid");
         // TODO: load values
     }
     heap = 5050 + 1;
     mu_assert(pool->heap == heap, "fbasic heap1");
     j = 0;
     for(i=2; i<100; i+=2){ // free the even ones
+        tmdebug("i=%u", i);
         Pool_free(pool, indexes[i]);
         used_ptrs--;
         used_bytes-=i+1;
         mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
         mu_assert(used_bytes == pool->used_bytes, "used bytes");
         j+=2;
+        mu_assert(Pool_freed_isvalid(pool), "freed isvalid");
     }
     temp=0;
     for(i=0; i<TM_FREED_BINS; i++){
@@ -264,6 +267,7 @@ char *test_tm_free_basic(){
     mu_assert(pool->heap == heap, "fbasic heap2"); // heap doesn't change
 
     for(i=98; i>0; i-=2){   // allocate the even ones again (in reverse order)
+        tmdebug("i=%u", i);
         mu_assert(Pool_sizeof(pool, indexes[i]) == i+1, "fbasic size");
         mu_assert(freed_hash(Pool_sizeof(pool, indexes[i])) == freed_hash(i+1), "fbasic hash");
         indexes[i] = Pool_alloc(pool, i+1);
@@ -273,11 +277,13 @@ char *test_tm_free_basic(){
         used_bytes+=i+1;
         mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
         mu_assert(used_bytes == pool->used_bytes, "used bytes");
+        mu_assert(Pool_freed_isvalid(pool), "freed isvalid");
     }
 
     index = Pool_alloc(pool, 4);
     heap += 4;
     mu_assert(pool->heap == heap, "fbasic heap4"); // heap finally changes
+    mu_assert(Pool_freed_isvalid(pool), "freed isvalid");
     Pool_del(pool);
     return NULL;
 }

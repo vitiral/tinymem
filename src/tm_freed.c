@@ -34,19 +34,28 @@ bool Pool_freed_isvalid(Pool *pool){
     for(bin=0; bin<TM_FREED_BINS; bin++){
         LinkedIndexArray *a = Pool_LIA(pool, pool->freed[bin]);
         if(!a) continue;
-        for(i=0; i<TM_FREED_BINSIZE; i++){
+        for(i=0; i<=TM_FREED_BINSIZE; i++){
+            // tmdebug("f i=%u, a=0x%x, a_prev=%u", i, a, a->prev);
             // check that data is valid
+            if(i==TM_FREED_BINSIZE || a->indexes[i] == 0){
+                // reached end of array, load and check prev if it exists
+                if(a->prev >= TM_UPOOL_ERROR){
+                    break;
+                }
+                LinkedIndexArray *a = Pool_LIA(pool, a->prev);
+                i=0;
+            }
             index = a->indexes[i];
             if(bin!=freed_hash(Pool_sizeof(pool, index))){
-                tmdebug("error: invalid hash");
+                tmdebug("error: invalid hash. index=%u", index);
                 return false;
             }
             if(Pool_filled_bool(pool, index)){
-                tmdebug("error: is filled");
+                tmdebug("error: is filled. index=%u", index);
                 return false;
             }
             if(!Pool_points_bool(pool, index)){
-                tmdebug("error: does not point");
+                tmdebug("error: does not point index=%u", index);
                 return false;
             }
         }
@@ -174,5 +183,6 @@ found:
             return 0;
         }
     }
+    tmdebug("popping: %u", index);
     return index;
 }
