@@ -23,5 +23,10 @@ tm_index    LIA_pop(Pool *pool, tm_index *last, tm_size size);
 
 #define Pool_LIA(pool, ulocation)   ((LinkedIndexArray *) Pool_uvoid(pool, ulocation))
 
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           For debugging and testing
+ */
+bool LIA_valid(Pool *pool, tm_index uindex);
 
 #endif

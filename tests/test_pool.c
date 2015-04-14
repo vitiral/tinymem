@@ -197,10 +197,11 @@ char *test_tm_free_foundation(){
 
     // append a whole bunch of values
     for(i=0; i<33; i++){
-        mu_assert(LIA_append(pool, &lray, 42), "free f sanity");
         mu_assert(LIA_append(pool, &lray, 37), "free f sanity");
         mu_assert(LIA_append(pool, &lray, 1), "free f sanity");
         mu_assert(LIA_append(pool, &lray, 2), "free f sanity");
+        mu_assert(LIA_append(pool, &lray, 42), "free f sanity");
+        mu_assert(LIA_valid(pool, lray), "lia valid");
     }
 
     for(i=0; i<33; i++){
@@ -208,6 +209,7 @@ char *test_tm_free_foundation(){
         mu_assert(LIA_pop(pool, &lray, 6) == 37, "free popping 37");
         mu_assert(LIA_pop(pool, &lray, 5) == 2, "free popping 2");
         mu_assert(LIA_pop(pool, &lray, 8) == 1, "free popping 1");
+        mu_assert(LIA_valid(pool, lray), "lia valid");
     }
     Pool_del(pool);
     return NULL;
@@ -243,7 +245,6 @@ char *test_tm_free_basic(){
     mu_assert(pool->heap == heap, "fbasic heap1");
     j = 0;
     for(i=2; i<100; i+=2){ // free the even ones
-        tmdebug("i=%u", i);
         Pool_free(pool, indexes[i]);
         used_ptrs--;
         used_bytes-=i+1;
@@ -267,7 +268,6 @@ char *test_tm_free_basic(){
     mu_assert(pool->heap == heap, "fbasic heap2"); // heap doesn't change
 
     for(i=98; i>0; i-=2){   // allocate the even ones again (in reverse order)
-        tmdebug("i=%u", i);
         mu_assert(Pool_sizeof(pool, indexes[i]) == i+1, "fbasic size");
         mu_assert(freed_hash(Pool_sizeof(pool, indexes[i])) == freed_hash(i+1), "fbasic hash");
         indexes[i] = Pool_alloc(pool, i+1);

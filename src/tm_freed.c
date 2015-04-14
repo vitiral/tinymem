@@ -1,6 +1,9 @@
 #include <stdio.h>
 #include "tm_freed.h"
 
+
+#define tmdebug(...)
+
 /* Freed Array methods for Pool
  */
 
@@ -128,52 +131,50 @@ bool LIA_append(Pool *pool, tm_index *last, tm_index value){
 }
 
 
+
 tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
     // Pops a value off of LIA that meets the size criteria
     // modifies *last if this action causes the last index to get deleted
-    if(Pool_status(pool, TM_ANY_DEFRAG)){
-        return 0;
-    }
     uint8_t i, j;
+    LinkedIndexArray *a;
     tm_index final_last_i;
-    tm_index index = 0;
     tm_index temp;
+    tm_index index = 0;
     tm_index uindex = *last;
-    LinkedIndexArray *a = Pool_LIA(pool, uindex);
 
-    if(! a) return 0;
+    if(Pool_status(pool, TM_ANY_DEFRAG))    return 0;
+    if(uindex >= TM_UPOOL_ERROR)            return 0;
     while(true){
+        a = Pool_LIA(pool, uindex);
         for(i=0; i<TM_FREED_BINSIZE; i++){
-             if(!a->indexes[i]) break;
             tmdebug("i=%u, index=%u, size=%u", i, a->indexes[i], Pool_sizeof(pool, a->indexes[i]));
+             if(!a->indexes[i]) break;
             if(Pool_sizeof(pool, a->indexes[i]) == size){
                 goto found;
             }
         }
-        if(!index){
-            // index wasn't found, try previous array
-            if(uindex == *last) final_last_i = i;  // will be used later
-            uindex = a->prev;
-            if(uindex >= TM_UPOOL_ERROR){
-                tmdebug("Could not find size=%u, i=%u", size, i);
-                return 0;
-            }
-            a = Pool_LIA(pool, uindex);
+        // index wasn't found, try previous array
+        if(uindex == *last) final_last_i = i - 1;  // will be used later
+        uindex = a->prev;
+        if(uindex >= TM_UPOOL_ERROR){
+            tmdebug("Could not find size=%u, i=%u", size, i);
+            return 0;
         }
     }
 found:
     if(uindex == *last){
         // the index was found in the "last" array
         // we need to find it's final index location
-        for(j=i; (j<TM_FREED_BINSIZE) && (a->indexes[j]); j++);
+        for(j=i; (j<TM_FREED_BINSIZE) && (a->indexes[j]); j++){}
         final_last_i = j - 1;
     }
 
     index = a->indexes[i];
 
-    if(!(uindex == *last && final_last_i == index)){
-        // index is something other than the last index, need to "pop"
-        // it out
+    if((uindex == *last) && (final_last_i == i)){
+        // index is at final index
+        a->indexes[i] = 0;
+    } else{
         // "pop" the very last index value
         temp = Pool_LIA(pool, *last)->indexes[final_last_i];
         Pool_LIA(pool, *last)->indexes[final_last_i] = 0;
@@ -183,9 +184,11 @@ found:
     }
 
     // If the *last array is empty, delete it
-    if(! final_last_i){
+    if(!final_last_i){
+        tmdebug("deleting current array. prev=%u", Pool_LIA(pool, *last)->prev);
         final_last_i = *last;
         *last = Pool_LIA(pool, final_last_i)->prev;
+        tmdebug("new last=%u", *last);
         if(!LIA_del(pool, final_last_i)){
             Pool_status_set(pool, TM_DEFRAG);
             Pool_defrag_full(pool);  // TODO: simple implementation
@@ -196,3 +199,29 @@ found:
     tmdebug("popping: %u", index);
     return index;
 }
+
+/*---------------------------------------------------------------------------*/
+/* For debugging and testing */
+bool LIA_valid(Pool *pool, tm_index uindex){
+    tm_index i;
+    LinkedIndexArray *a;
+    bool islast = true;
+    // check to make sure prev arrays are all full
+    while(uindex < TM_UPOOL_ERROR){
+        a = Pool_LIA(pool, uindex);
+        for(i=0; i<TM_FREED_BINSIZE; i++){
+            if(!a->indexes[i]){
+                if(islast){
+                    break;
+                } else {
+                    tmdebug("invalid last index. i=%u", i);
+                    return false;
+                }
+            }
+        }
+        islast = false;
+        uindex = a->prev;
+    }
+    return true;
+}
+
