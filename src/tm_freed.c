@@ -1,11 +1,11 @@
 #include <stdio.h>
 #include "tm_freed.h"
 
-
 #define tmdebug(...)
 
-/* Freed Array methods for Pool
- */
+
+/*---------------------------------------------------------------------------*/
+/* Freed Array methods for Pool */
 
 #define HASH_PRIME 1677619
 
@@ -31,43 +31,9 @@ tm_index Pool_freed_getsize(Pool *pool, tm_size size){
     return LIA_pop(pool, &(pool->freed[findex]), size);
 }
 
-bool Pool_freed_isvalid(Pool *pool){
-    tm_index bin, i;
-    tm_index index;
-    for(bin=0; bin<TM_FREED_BINS; bin++){
-        LinkedIndexArray *a = Pool_LIA(pool, pool->freed[bin]);
-        if(!a) continue;
-        for(i=0; i<=TM_FREED_BINSIZE; i++){
-            // tmdebug("f i=%u, a=0x%x, a_prev=%u", i, a, a->prev);
-            // check that data is valid
-            if(i==TM_FREED_BINSIZE || a->indexes[i] == 0){
-                // reached end of array, load and check prev if it exists
-                if(a->prev >= TM_UPOOL_ERROR){
-                    break;
-                }
-                LinkedIndexArray *a = Pool_LIA(pool, a->prev);
-                i=0;
-            }
-            index = a->indexes[i];
-            if(bin!=freed_hash(Pool_sizeof(pool, index))){
-                tmdebug("error: invalid hash. index=%u", index);
-                return false;
-            }
-            if(Pool_filled_bool(pool, index)){
-                tmdebug("error: is filled. index=%u", index);
-                return false;
-            }
-            if(!Pool_points_bool(pool, index)){
-                tmdebug("error: does not point index=%u", index);
-                return false;
-            }
-        }
-    }
-    return true;
-}
 
-/* Linked Index Array Methods
- */
+/*---------------------------------------------------------------------------*/
+/* Linked Index Array Methods */
 
 uint16_t LIA_new(Pool *pool){
     uint8_t i;
@@ -85,10 +51,7 @@ uint16_t LIA_new(Pool *pool){
 
 bool LIA_del(Pool *pool, tm_index uindex){
     Pool_LIA(pool, uindex)->prev = TM_UPOOL_ERROR;
-    if(!Pool_ufree(pool, uindex)){
-        return false;
-    }
-    return true;
+    return Pool_ufree(pool, uindex);
 }
 
 
@@ -129,7 +92,6 @@ bool LIA_append(Pool *pool, tm_index *last, tm_index value){
     *last = uindex;
     return true;
 }
-
 
 
 tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
@@ -200,8 +162,46 @@ found:
     return index;
 }
 
+
 /*---------------------------------------------------------------------------*/
 /* For debugging and testing */
+
+bool Pool_freed_isvalid(Pool *pool){
+    tm_index bin, i;
+    tm_index index;
+    for(bin=0; bin<TM_FREED_BINS; bin++){
+        LinkedIndexArray *a = Pool_LIA(pool, pool->freed[bin]);
+        if(!a) continue;
+        for(i=0; i<=TM_FREED_BINSIZE; i++){
+            // tmdebug("f i=%u, a=0x%x, a_prev=%u", i, a, a->prev);
+            // check that data is valid
+            if(i==TM_FREED_BINSIZE || a->indexes[i] == 0){
+                // reached end of array, load and check prev if it exists
+                if(a->prev >= TM_UPOOL_ERROR){
+                    break;
+                }
+                LinkedIndexArray *a = Pool_LIA(pool, a->prev);
+                i=0;
+            }
+            index = a->indexes[i];
+            if(bin!=freed_hash(Pool_sizeof(pool, index))){
+                tmdebug("error: invalid hash. index=%u", index);
+                return false;
+            }
+            if(Pool_filled_bool(pool, index)){
+                tmdebug("error: is filled. index=%u", index);
+                return false;
+            }
+            if(!Pool_points_bool(pool, index)){
+                tmdebug("error: does not point index=%u", index);
+                return false;
+            }
+        }
+    }
+    return true;
+}
+
+
 bool LIA_valid(Pool *pool, tm_index uindex){
     tm_index i;
     LinkedIndexArray *a;
