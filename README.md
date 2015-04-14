@@ -13,7 +13,7 @@ tinymem is pre-alpha, which means that the foundational operation is complete, b
 ```
 // Alocate the memory at some point in your code
 int len = 100;
-tm_ptr ptr = tmalloc(sizeof(int) * len);// ptr that never changes
+tm_ptr ptr = tm_alloc(sizeof(int) * len);// ptr that never changes
 
 // ... later use the memory
 int *array = (int *) tm_void(ptr);
@@ -23,7 +23,7 @@ for(i=0; i<len; i++){
 // ... do more stuff
 
 // ... When or if you want to free the data
-tmfree(ptr)  // free the memory again
+tm_free(ptr)  // free the memory again
 ```
 
 

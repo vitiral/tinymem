@@ -1,5 +1,11 @@
 # tinymem Developer Documentation
 
+## Table of Contents
+- [Basic Theory](#basic-theory)
+- [Defragmentation](#defragmentation)
+- [Memory Reuse](#memory-reuse)
+
+
 ## Basic Theory
 
 The first thing to understand is that tinymem is created to be simple. The goal 
@@ -47,14 +53,14 @@ If I free block **B** it will look like:
 > locations
 
 There are three options:
-I have two options:
 - Make sure to use B when another call requires that much memory (or less)
 - Move some later chunk of memory (let’s call it D) that is less than or equal 
     to B into B’s current location.
 - Move C backwards so the memory is no longer fragmented
 
 The first option has the problem that the application might never want that much 
-memory again, or if there are enough “holes” like B, it won’t have enough memory to grant a request for a large chunk.
+memory again, or if there are enough “holes” like B, it won’t have enough memory
+to grant a request for a large chunk.
 
 What we would like to do is option 2 or 3 which is to move an already existing 
 chunk of memory backwards, eliminating B entirely. However, doing so would screw 
@@ -72,3 +78,135 @@ single problem: I can’t move memory away from the heap when I want to.
 To solve this problem, tinymem simply circumvents it. It allows you to move 
 block C backwards by putting an application layer between the user’s code and 
 access to pointer C. See “Basic Use” in the README.md for how this works
+
+
+## Defragmentation
+
+Being able to fully defragment memory is the primary feature of tinymem that
+differentiates it from other memory managers. The current implementation does
+it very simply. 
+
+> Note: The code is in `src/tm_pool.c/Pool_defrag_full`
+
+From our example above, say we have memory that looks like this:
+
+```
+# TOTAL MEMORY
+ A       B   C         D
+|X X X X|- -|X X X X X|X X X X X ...
+```
+
+The full defragmentation does what everybody wants to do, it simply moves **C**
+backwards, eliminating **B**
+
+```
+# TOTAL MEMORY
+ A       C         D
+|X X X X|X X X X X|X X X X X ...
+```
+
+The process for doing this is as follows:
+- reset the micro-pool (`pool->upool`). [Memory Reuse](#memory-reuse) cannot be done
+    while a full defragmentation is happening
+- copies all “filled” indexes from pool->pointers to the upool
+    - sorts the indexes by location
+- moves all data left
+    - because all data is now sorted by location, it just needs to be
+        moved left (i.e. `C->B` as in the diagram above)
+- cleans up
+    - moves the heap pointer backwards
+
+### Speed concerns
+full_defrag is not intended to be fast. It is intended to be simple,
+robust, and (most importantly) it completely defragments the memory
+(no holes)
+
+
+### Threading
+It should be possible to make the defrag routine re-entrant. During
+a defrag, memory could still be allocated -- but only off the heap.
+
+Freed values can be put on the upool stack. If too many values
+are freed during a defrag (unlikely), and the ustack would overflow,
+a flag will be set to require a remake of the freed bins
+
+
+## Memory Reuse
+
+> Most of this code is in `src/tm_freed.c`
+
+The other primary requirement for a memory manager is re-using memory
+that has previously been freed. If I allocate a 4byte array, and then
+free it, I don’t want to use heap memory if I allocate another 4byte
+array
+
+There are several `Pool` data structures that are used to store freed
+values
+
+- `pool->upool`: this is where all freed values are stored in
+    LinkedIndexArrays
+- `pool->freed`: a tm_index array of size TM_FREED_BINS. 
+
+The data structure where freed values are stored is the LinkedIndexArray.
+This is similar to a LinkedList, except it is a LinkedArray (of indexes).
+This data structure was chosen because it is more memory efficient.
+
+When a value is freed:
+- Finds the bin of the value:
+    - The size of the freed value is put through a hash that
+        corresponds to an index in `pool->freed`
+    - this index is a pointer to a LinkedIndexArray
+- appends the value into the bin
+
+When a value is requested:
+- Finds the bin of the value
+- searches through the LinkedIndexArray for the value
+- if:
+    - found: returns the index of the found value
+    - not found: allocates new space on the heap
+
+### Speed concerns
+When there are many freed values:
+- may take a long time to search through the freed bin for
+    allocation
+- no impact on `tm_free`
+
+When there are many freed sizes:
+- there will be size overlap between values, increasing
+    allocation time
+- no impact on `tm_free`
+
+To reduce these effects, a [Fast Defragmentation](#fast-defragmentation) method
+needs to be implemented that consolidates freed indexes
+
+# Minor Issues
+The two major issues with microcontroller memory management are now resolved:
+memory re-use and defragmentation. Now it would be nice to solve
+the more minor speed and resource usage issues.
+
+- resource usage
+    - cpu usage
+    - memory usage
+- response time
+    - defragmentation time
+    - allocation time
+    - deallocation time: not an issue currently
+
+<a name=”fast_defrag”/>
+## Fast Defragmentation
+Goals of fast defragmentation:
+- use few resources (be fast and efficient)
+- consolodate freed memory
+    - this reduces the number of freed pointers, fixing the speed concerns in
+        [Memory Reuse](#memory-reuse)
+    - allows for larger allocations
+- *on average* move data away from the heap
+    - also make the heap larger when freed values are next to it
+        - this will tend to increase the size of the heap
+- *on average* fill holes in memory
+    - could be done by moving several small values into a larger hole
+    - small values would have to also be next to holes, otherwise
+        this would increase fragmentation
+
+The correct implementation of a fast defragmenter has not yet been decided.
+It is a work in progress.
