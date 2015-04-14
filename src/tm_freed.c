@@ -95,16 +95,17 @@ bool LIA_append(Pool *pool, tm_index *last, tm_index value){
     // If this returns false it is time to full defrag
     // because free values will be lost otherwise!
     uint8_t i;
+    LinkedIndexArray *a;
     tm_index uindex;
     if(Pool_status(pool, TM_ANY_DEFRAG)){
         // TODO: for threading some very specific things need to happen here.
         //      Everything is fine for simple
         return false;
     }
-    LinkedIndexArray *a = Pool_LIA(pool, *last);
-    if(a){  // if *last is ERROR/NULL, just create a new array
+    if(*last < TM_UPOOL_ERROR){  // There is an array to use
+        a = Pool_LIA(pool, *last);
         for(i=0; i<TM_FREED_BINSIZE; i++){
-            if(! a->indexes[i]){
+            if(!a->indexes[i]){
                 a->indexes[i] = value;
                 if(i<TM_FREED_BINSIZE - 1) a->indexes[i+1] = 0;
                 return true;
@@ -143,19 +144,21 @@ tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
     if(! a) return 0;
     while(true){
         for(i=0; i<TM_FREED_BINSIZE; i++){
+             if(!a->indexes[i]) break;
+            tmdebug("i=%u, index=%u, size=%u", i, a->indexes[i], Pool_sizeof(pool, a->indexes[i]));
             if(Pool_sizeof(pool, a->indexes[i]) == size){
-                index = a->indexes[i];
                 goto found;
             }
         }
-        if(! index){
+        if(!index){
             // index wasn't found, try previous array
             if(uindex == *last) final_last_i = i;  // will be used later
             uindex = a->prev;
-            a = Pool_LIA(pool, uindex);
-            if(! a){
+            if(uindex >= TM_UPOOL_ERROR){
+                tmdebug("Could not find size=%u, i=%u", size, i);
                 return 0;
             }
+            a = Pool_LIA(pool, uindex);
         }
     }
 found:
@@ -166,12 +169,18 @@ found:
         final_last_i = j - 1;
     }
 
-    // "pop" the very last index value
-    temp = Pool_LIA(pool, *last)->indexes[final_last_i];
-    Pool_LIA(pool, *last)->indexes[final_last_i] = 0;
+    index = a->indexes[i];
 
-    // Put the popped value into the one being removed
-    a->indexes[i] = temp;
+    if(!(uindex == *last && final_last_i == index)){
+        // index is something other than the last index, need to "pop"
+        // it out
+        // "pop" the very last index value
+        temp = Pool_LIA(pool, *last)->indexes[final_last_i];
+        Pool_LIA(pool, *last)->indexes[final_last_i] = 0;
+
+        // Put the popped value into the one being removed
+        a->indexes[i] = temp;
+    }
 
     // If the *last array is empty, delete it
     if(! final_last_i){
@@ -180,6 +189,7 @@ found:
         if(!LIA_del(pool, final_last_i)){
             Pool_status_set(pool, TM_DEFRAG);
             Pool_defrag_full(pool);  // TODO: simple implementation
+            tmdebug("Failed deletion");
             return 0;
         }
     }
