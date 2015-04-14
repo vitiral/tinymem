@@ -39,7 +39,7 @@ uint16_t LIA_new(Pool *pool){
     uint8_t i;
     LinkedIndexArray *a;
     tm_index uindex = Pool_ualloc(pool, sizeof(LinkedIndexArray));
-    if(! uindex) return 0;
+    if(uindex >= TM_UPOOL_ERROR) return TM_UPOOL_ERROR;
     a = Pool_LIA(pool, uindex);
     a->prev = TM_UPOOL_ERROR + 1;
     for(i=0; i<TM_FREED_BINSIZE; i++){

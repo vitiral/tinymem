@@ -5,10 +5,12 @@
 
 /*#define tmdebug(...)*/
 
-#define TABLE_STANDIN NULL
+tm_size mem_used;
 
-#define HASH_PRIME 1677619
-#define MAXPTRS TM_MAX_POOL_PTRS - 1
+#define TABLE_STANDIN       (NULL)
+#define HASH_PRIME          (1677619)
+#define MAXPTRS             (TM_MAX_POOL_PTRS - 1)
+#define mem_free            (TM_POOL_SIZE - mem_used)
 
 bool alloc_index(tm_index *indexes, tm_index index, tm_size size);
 
@@ -89,6 +91,7 @@ bool alloc_index(tm_index *indexes, tm_index index, tm_size size){
     uint8_t *data;
     indexes[index] = tm_alloc(size);
     if(!indexes[index]) return false;
+    mem_used += size;
     if(tm_sizeof(indexes[index]) != size){
         tmdebug("alloc size wrong size: %u != %u", tm_sizeof(indexes[index]), size);
         return false;
@@ -101,7 +104,9 @@ bool alloc_index(tm_index *indexes, tm_index index, tm_size size){
 }
 
 bool free_index(tm_index *indexes, tm_index index){
+    if(!indexes[index]) return false;
     tm_free(indexes[index]);
+    mem_used -= tm_sizeof(indexes[index]);
     indexes[index] = 0;
     return true;
 }
@@ -111,6 +116,10 @@ char *test_basic(){
     const tm_size maxlen = (TM_POOL_SIZE / TM_MAX_POOL_PTRS) * 2;
     tm_size i;
     tm_index indexes[MAXPTRS] = {0};
+    tm_index lindexes[1];
+
+    tm_init();
+
     mu_assert(fill_indexes(indexes, MAXPTRS, maxlen), "filled");
 
     // Deallocate every other one (backwards) and then refill it
@@ -121,7 +130,6 @@ char *test_basic(){
 
     mu_assert(fill_indexes(indexes, MAXPTRS, maxlen), "filled 2");
 
-
     // Dealocate every other data again, then request a large amount of memory.
     // This will require a full defrag to happen first
     // and fill it
@@ -129,19 +137,65 @@ char *test_basic(){
         free_index(indexes, i);
         mu_assert(!tm_status(0, TM_ANY_DEFRAG), "no defrag request");
     }
-    i+=2;
-    mu_assert(alloc_index(indexes, i, TM_POOL_SIZE / 3), "allocate large");
+    mu_assert(alloc_index(lindexes, 0, TM_POOL_SIZE / 3), "allocate large");
     // TODO: simple. In threaded make sure full defrag is requested and fulfill it
     mu_assert(check_indexes(indexes, MAXPTRS), "check indexes");
-    mu_assert(!check_sizes(indexes, MAXPTRS, maxlen), "check sizes");
+    mu_assert(check_indexes(lindexes, 1), "check lindexes");
+    mu_assert(check_sizes(indexes, MAXPTRS, maxlen), "check sizes");
 
     return NULL;
 }
+
+
+char *test_thrash(){
+    // do a sliding scale allocation / free where it starts out that
+    // memory is allocated in tiny chunks and then gets more and more
+    // allocated into large chunks
+    const tm_size maxlen = (TM_POOL_SIZE / TM_MAX_POOL_PTRS) * 2;
+    const big_len = 100;
+    uint8_t myhash;
+    tm_index i, ind_i = 0, big_i = 0, temp;
+    tm_index indexes[MAXPTRS] = {0};
+    tm_index big_indexes[big_len];
+    for(i=0;i<big_len;i++) big_indexes[i] = 0;
+
+    tm_init();
+
+    mem_used = 1;
+    mu_assert(fill_indexes(indexes, MAXPTRS, maxlen), "fill");
+    for(big_i=0; big_i<big_len; big_i++){
+        // deallocate a psuedorandom number of indexes
+        myhash = index_hash(ind_i, big_i) % (MAXPTRS / (2*big_len));
+        if(myhash <=0) myhash = 1;
+
+        /*tmdebug("bigi=%u, ind_i=%u, ind[ind_i]=%u, myhash=%u", big_i, ind_i, indexes[ind_i], myhash);*/
+        temp = ind_i + myhash;
+        for(; ind_i < temp; ind_i++){
+            mu_assert(free_index(indexes, ind_i), "free");
+            mu_assert(!tm_status(0, TM_ANY_DEFRAG), "no defrag request");
+        }
+
+        // allocate all free memory as a big_index
+        if(!alloc_index(big_indexes, big_i, mem_free / 2)){
+            tmdebug("mem_free=%u", mem_free);
+            tm_print_stats();
+            mu_assert(0, "alloc large");
+        }
+        // TODO: simple. In threaded make sure full defrag is requested and fulfill it
+
+        mu_assert(check_indexes(indexes, MAXPTRS), "check indexes");
+        mu_assert(check_indexes(big_indexes, big_len), "check big indexes");
+        mu_assert(check_sizes(indexes, MAXPTRS, maxlen), "check sizes");
+    }
+    return NULL;
+}
+
 
 char *all_tests(){
     mu_suite_start();
 
     mu_run_test(test_basic);
+    mu_run_test(test_thrash);
     return NULL;
 }
 

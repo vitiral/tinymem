@@ -11,7 +11,7 @@
     printf("\n");}while(0)
 
 #define mu_assert(test, message) if (!(test)) { log_err(message); return message; }
-#define mu_run_test(test) debug("\n-----%s ", " " #test); \
+#define mu_run_test(test) debug("-----%s \n", " " #test); \
     message = test(); tests_run++; if (message) return message;
 
 #define RUN_TESTS(name) int main(int argc, char *argv[]) {\

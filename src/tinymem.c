@@ -6,6 +6,7 @@
 Pool pool = Pool_declare();
 
 void tm_init(){
+    pool = Pool_declare();
     Pool_freed_reset(&pool);
 }
 
