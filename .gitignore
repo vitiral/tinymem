@@ -1,4 +1,6 @@
 *.gch
 *.log
-tests/
+tests/*
+!tests/*.c
+notes.txt
 *.pyc
