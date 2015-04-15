@@ -1,4 +1,5 @@
 /*
+ * Code adapted from: http://locklessinc.com/downloads/t-test1.c
  * $Id: t-test1.c,v 1.1.1.1 2003/07/02 16:32:09 matthias.urban Exp $
  * by Wolfram Gloger 1996-1999
  * A multi-thread test for malloc performance, maintaining one pool of
@@ -8,33 +9,45 @@
  * Steven Fuerst 2009
  */
 
-#define USE_PTHREADS    1
-#define USE_MALLOC    0
-#define USE_SPROC    0
-#define USE_THR        0
+#include "tinymem.h"
+#include "tm_pool.h"
+/* calloc function not defined in tinymem */
+tm_index tm_calloc(tm_size num, tm_size size){
+    tm_index index = tm_alloc(num * size);
+    if(!index) return 0;
+    memset(tm_uint8_p(index), 0, num*size);
+    return index;
+}
 
-/* Testing level */
+#define USE_PTHREADS    0
+#define USE_MALLOC      0
+#define USE_SPROC       0
+#define USE_THR         0
+
+/* Testing level. Should a memcheck be done?*/
 #ifndef TEST
 #define TEST 0
 #endif
 
-#define N_TOTAL        500
+#define N_TOTAL     500
 #ifndef N_THREADS
-#define N_THREADS    2
+#define N_THREADS   1
 #endif
 #ifndef N_TOTAL_PRINT
 #define N_TOTAL_PRINT 50
 #endif
-#define STACKSIZE    32768
+#define STACKSIZE   (10000)
 #ifndef MEMORY
-#define MEMORY        (1ULL << 26)
+#define MEMORY      (TM_POOL_SIZE - 100)
 #endif
 
-#define RANDOM(s)    (rng() % (s))
+#define RANDOM(s)   (rng() % (s))
 
-#define MSIZE        10000
-#define I_MAX        10000
-#define ACTIONS_MAX    30
+// size per bin
+#define MSIZE       1024
+// Loops to run
+#define I_MAX       10000
+#define ACTIONS_MAX 30
 
 
 #ifndef __GNUC__
@@ -101,7 +114,7 @@ static int pthread_join(pthread_t t, void **res)
         *res = tv->retval;
     }
 
-    free(tv);
+    tm_free(tv);
 
     return 0;
 }
@@ -119,7 +132,8 @@ static int pthread_join(pthread_t t, void **res)
 #define pthread_cond_t CONDITION_VARIABLE
 
 /* Hack - replace memalign with malloc, so we can compile */
-#define memalign(A, S) malloc(S)
+#define memalign(A, S)          tm_alloc(S)
+
 
 #else
 
@@ -192,12 +206,13 @@ static inline unsigned rng(void)
    realloc() can dwarf all other execution times.  Avoid this with a
    size threshold. */
 #ifndef REALLOC_MAX
-#define REALLOC_MAX    2000
+#define REALLOC_MAX 2000
 #endif
 
 struct bin
 {
-    unsigned char *ptr;
+    /*unsigned char *ptr;*/
+    tm_index index;
     size_t size;
 };
 
@@ -210,9 +225,10 @@ static pthread_mutex_t finish_mutex;
 
 #if TEST > 0
 
-static void mem_init(unsigned char *ptr, size_t size)
+static void mem_init(tm_index index, size_t size)
 {
     size_t i, j;
+    unsigned char *ptr = tm_uint8_p(index);
 
     if (!size) return;
     for (i = 0; i < size; i += 2047)
@@ -224,9 +240,10 @@ static void mem_init(unsigned char *ptr, size_t size)
     ptr[size-1] = j ^ (j>>8);
 }
 
-static int mem_check(unsigned char *ptr, size_t size)
+static int mem_check(tm_index index, size_t size)
 {
     size_t i, j;
+    unsigned char *ptr = tm_uint8_p(index);
 
     if (!size) return 0;
     for (i = 0; i < size; i += 2047)
@@ -239,8 +256,9 @@ static int mem_check(unsigned char *ptr, size_t size)
     return 0;
 }
 
-static int zero_check(void *p, size_t size)
+static int zero_check(tm_index index, size_t size)
 {
+    void *p = tm_void(index);
     unsigned *ptr = p;
     unsigned char *ptr2;
 
@@ -267,8 +285,9 @@ static int zero_check(void *p, size_t size)
  */
 static void bin_alloc(struct bin *m, size_t size, unsigned r)
 {
+    uint8_t *ptr;
 #if TEST > 0
-    if (mem_check(m->ptr, m->size))
+    if (mem_check(m->index, m->size))
     {
         printf("memory corrupt!\n");
         exit(1);
@@ -279,48 +298,52 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
     if (r < 4)
     {
         /* memalign */
-        if (m->size > 0) free(m->ptr);
-        m->ptr = memalign(sizeof(int) << r, size);
+        if (m->size > 0) tm_free(m->index);
+        m->index = memalign(sizeof(int) << r, size);
     }
     else if (r < 20)
     {
         /* calloc */
-        if (m->size > 0) free(m->ptr);
-        m->ptr = calloc(size, 1);
+        if (m->size > 0) tm_free(m->index);
+        m->index = tm_calloc(size, 1);
 #if TEST > 0
-        if (zero_check(m->ptr, size))
+        if (zero_check(m->index, size))
         {
-            size_t i;
+            ptr = tm_uint8_p(m->index);
+            tm_size i;
             for (i = 0; i < size; i++)
             {
-                if (m->ptr[i]) break;
+                if (ptr[i]) break;
             }
-            printf("calloc'ed memory non-zero (ptr=%p, i=%ld)!\n", m->ptr, i);
+            printf("calloc'ed memory non-zero (index=%p, i=%ld)!\n", m->index, i);
             exit(1);
         }
 #endif
     }
-    else if ((r < 100) && (m->size < REALLOC_MAX))
+    /*else if ((r < 100) && (m->size < REALLOC_MAX))*/
+    else if(0)
     {
         /* realloc */
-        if (!m->size) m->ptr = NULL;
-        m->ptr = realloc(m->ptr, size);
+        if (!m->size) m->index = 0;
+        m->index = tm_realloc(m->index, size);
+        if(!m->index) printf("realloc failed!\n");
     }
     else
     {
         /* malloc */
-        if (m->size > 0) free(m->ptr);
-        m->ptr = malloc(size);
+        if (m->size > 0) tm_free(m->index);
+        m->index = tm_alloc(size);
     }
-    if (!m->ptr)
+    if (!m->index)
     {
         printf("out of memory (r=%d, size=%ld)!\n", r, (unsigned long)size);
+        tm_print_stats();
         exit(1);
     }
 
     m->size = size;
 #if TEST > 0
-    mem_init(m->ptr, m->size);
+    mem_init(m->index, m->size);
 #endif
 }
 
@@ -331,20 +354,20 @@ static void bin_free(struct bin *m)
     if (!m->size) return;
 
 #if TEST > 0
-    if (mem_check(m->ptr, m->size))
+    if (mem_check(m->index, m->size))
     {
         printf("memory corrupt!\n");
         exit(1);
     }
 #endif
 
-    free(m->ptr);
+    tm_free(m->index);
     m->size = 0;
 }
 
 struct bin_info
 {
-    struct bin *m;
+    tm_index m;             // points to `struct bin`
     size_t size, bins;
 };
 
@@ -352,10 +375,12 @@ struct bin_info
 static void bin_test(struct bin_info *p)
 {
     int b;
+    struct bin *mybin;
 
     for (b = 0; b < p->bins; b++)
     {
-        if (mem_check(p->m[b].ptr, p->m[b].size))
+        mybin = (struct bin *)tm_void(p->m);
+        if (mem_check(mybin[b].index, mybin[b].size))
         {
             printf("memory corrupt!\n");
             exit(1);
@@ -383,6 +408,7 @@ static void malloc_test(void *ptr, size_t stack_len)
     int i, pid = 1;
     unsigned b, j, actions;
     struct bin_info p;
+    struct bin *mybin;
 
     rnd_seed = st->seed;
 
@@ -406,30 +432,33 @@ static void malloc_test(void *ptr, size_t stack_len)
     }
 #endif
 
-    p.m = malloc(st->bins * sizeof(*p.m));
+    p.m = tm_alloc(st->bins * sizeof(struct bin));
+    mybin = (struct bin *)tm_void(p.m);
     p.bins = st->bins;
     p.size = st->size;
     for (b = 0; b < p.bins; b++)
     {
-        p.m[b].size = 0;
-        p.m[b].ptr = NULL;
-        if (!RANDOM(2)) bin_alloc(&p.m[b], RANDOM(p.size) + 1, rng());
+        mybin[b].size = 0;
+        mybin[b].index = 0;
+        if (!RANDOM(2)) bin_alloc(&mybin[b], RANDOM(p.size) + 1, rng());
     }
 
     for (i = 0; i <= st->max;)
     {
 #if TEST > 1
+        mybin = (struct bin *)tm_void(p.m);
         bin_test(&p);
 #endif
         actions = RANDOM(ACTIONS_MAX);
 
+        mybin = (struct bin *)tm_void(p.m);
 #if USE_MALLOC && MALLOC_DEBUG
         if (actions < 2) mallinfo();
 #endif
         for (j = 0; j < actions; j++)
         {
             b = RANDOM(p.bins);
-            bin_free(&p.m[b]);
+            bin_free(&mybin[b]);
         }
         i += actions;
         actions = RANDOM(ACTIONS_MAX);
@@ -437,7 +466,7 @@ static void malloc_test(void *ptr, size_t stack_len)
         for (j = 0; j < actions; j++)
         {
             b = RANDOM(p.bins);
-            bin_alloc(&p.m[b], RANDOM(p.size) + 1, rng());
+            bin_alloc(&mybin[b], RANDOM(p.size) + 1, rng());
 #if TEST > 2
             bin_test(&p);
 #endif
@@ -446,9 +475,10 @@ static void malloc_test(void *ptr, size_t stack_len)
         i += actions;
     }
 
-    for (b = 0; b < p.bins; b++) bin_free(&p.m[b]);
+    mybin = (struct bin *)tm_void(p.m);
+    for (b = 0; b < p.bins; b++) bin_free(&mybin[b]);
 
-    free(p.m);
+    tm_free(mybin);
 
 #ifdef TEST_FORK
 end:
@@ -529,8 +559,11 @@ int main(int argc, char *argv[])
     if (size < 2) size = 2;
 
     bins = MEMORY  /(size * n_thr);
+    printf("MEMORY=%u\n", MEMORY);
+    printf("bins want=%u\n", bins);
     if (argc > 5) bins = atoi(argv[5]);
     if (bins < 4) bins = 4;
+    printf("bins have=%u\n", bins);
 
 #if USE_PTHREADS
     printf("Using posix threads.\n");
@@ -541,7 +574,7 @@ int main(int argc, char *argv[])
 #elif USE_SPROC
     printf("Using sproc() threads.\n");
 #else
-    printf("No threads.\n");
+    printf("No threads.. n_thr=%u\n", n_thr);
 #endif
 
     printf("total=%d threads=%d i_max=%d size=%ld bins=%d\n",
@@ -558,9 +591,11 @@ int main(int argc, char *argv[])
     pthread_mutex_lock(&finish_mutex);
 #endif
 
+    printf("st address=0x%x\n", st);
     /* Start all n_thr threads. */
     for (i = 0; i < n_thr; i++)
     {
+        printf("starting thread i=%u\n", i);
         st[i].bins = bins;
         st[i].max = i_max;
         st[i].size = size;
@@ -632,7 +667,9 @@ int main(int argc, char *argv[])
             }
         }
 #else /* NO_THREADS */
+        printf("ending threads\n");
         for (i = 0; i < n_thr; i++) my_end_thread(&st[i]);
+        printf("doing something else?\n");
         break;
 #endif
     }
