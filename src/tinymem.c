@@ -14,6 +14,10 @@ inline tm_index tm_alloc(tm_size size){
     return Pool_alloc(&pool, size);
 }
 
+inline tm_index tm_realloc(tm_index index, tm_size size){
+    return Pool_realloc(&pool, index, size);
+}
+
 inline void tm_free(tm_index index){
     return Pool_free(&pool, index);
 }

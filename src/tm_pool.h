@@ -178,7 +178,7 @@ typedef struct {
  *                  index_to
  */
 #define Pool_memmove(pool, index_to, index_from)  memmove(              \
-            Pool_void(pool, index_to) + Pool_sizeof(pool, index_to),    \
+            Pool_void(pool, index_to),                                  \
             Pool_void(pool, index_from),                                \
             Pool_sizeof(pool, index_from)                               \
         )
@@ -219,6 +219,21 @@ Pool*           Pool_new();
  *                  On error or if not enough memory, return value == 0
  */
 tm_index        Pool_alloc(Pool *pool, tm_size size);
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           changes the size of memory in the pool
+ *                  See standard documentation on realloc for more info
+ * \param pool      pointer to Pool struct
+ * \param index     tm_index to realloc
+ *                  If 0: acts as tm_alloc(size)
+ * \param size      new requested size of index
+ *                  If 0: acts as tm_free(index)
+ * \return          index with new size of memory.
+ *                  If this index has changed, the previous index is been freed
+ *                  If return value == 0, then no change has been done
+ *                  (or index has been freed if size=0)
+ */
+tm_index        Pool_realloc(Pool *pool, tm_index index, tm_size size);
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           free allocated memory from pool

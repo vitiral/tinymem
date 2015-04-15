@@ -42,6 +42,18 @@ inline tm_index tm_alloc(tm_size size);
 
 /*---------------------------------------------------------------------------*/
 /**
+ * \brief           changes the size of memory of index in the tinymem pool(s)
+ *                  See standard documentation on realloc for more info
+ * \param index     tm_index to realloc
+ * \param size      new requested size of index
+ * \return          index with new size of memory.
+ *                  If this index has changed, the previous index is been freed
+ *                  If return value == 0, then no change has been done
+ */
+inline tm_index        tm_realloc(tm_index index, tm_size size);
+
+/*---------------------------------------------------------------------------*/
+/**
  * \brief           free memory index from tinymem
  * \param index     tm_index value to free
  * \return          void

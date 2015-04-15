@@ -72,6 +72,61 @@ char *test_tm_pool_alloc(){
 }
 
 
+char *test_tm_pool_realloc(){
+    tm_index index, prev_index, other_index;
+    uint8_t i, n;
+    uint16_t used = 1;
+    uint16_t used_ptrs = 1;
+    Pool *pool;
+
+    pool = Pool_new();
+    mu_assert(pool, "Pool_alloc was malloced");
+
+    // allocate data
+    index = Pool_alloc(pool, 40);
+    mu_assert(index, "sanity");
+    used+=40; used_ptrs++;
+    mu_assert(used == pool->used_bytes, "used");
+    mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+
+    // shrink data
+    prev_index = index;
+    index = Pool_realloc(pool, index, 33);
+    mu_assert(index, "sanity");
+    mu_assert(index == prev_index, "no change");
+    used-=7;  // more free memory, free pointers don't "use pointers"
+    mu_assert(used == pool->used_bytes, "used");
+    mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+
+    // grow data
+    prev_index = index;
+    index = Pool_realloc(pool, index, 60);
+    mu_assert(index, "sanity");
+    mu_assert(index != prev_index, "changed");
+    used += 60 - 33;  // use more memory
+    mu_assert(used == pool->used_bytes, "used");
+    mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+
+    // "null" pointer acts as alloc
+    other_index = Pool_realloc(pool, 0, 100);
+    mu_assert(other_index, "sanity");
+    used+=100; used_ptrs++;
+    mu_assert(used == pool->used_bytes, "used");
+    mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+
+    // size=0 frees data
+    prev_index = Pool_realloc(pool, index, 0);
+    mu_assert(!prev_index, "is null");
+    mu_assert(!Pool_filled_bool(pool, index), "is freed");
+    used -= 60; used_ptrs--;  // memory freed, pointer freed
+    mu_assert(used == pool->used_bytes, "used");
+    mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+
+    Pool_del(pool);
+    return NULL;
+}
+
+
 char *test_tm_pool_defrag_full(){
     uint8_t i, j;
     tm_index c;
@@ -293,6 +348,7 @@ char *all_tests(){
 
     mu_run_test(test_tm_pool_new);
     mu_run_test(test_tm_pool_alloc);
+    mu_run_test(test_tm_pool_realloc);
     mu_run_test(test_tm_pool_defrag_full);
     mu_run_test(test_upool_basic);
     mu_run_test(test_tm_free_foundation);

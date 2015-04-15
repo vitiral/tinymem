@@ -177,6 +177,43 @@ tm_index Pool_alloc(Pool *pool, tm_index size){
 }
 
 
+tm_index Pool_realloc(Pool *pool, tm_index index, tm_size size){
+    tm_index new_index;
+    tm_size prev_size;
+
+    if(!index) return Pool_alloc(pool, size);
+    if(!Pool_filled_bool(pool, index)) return 0;
+    if(!size){
+        Pool_free(pool, index);
+        return 0;
+    }
+    prev_size = Pool_sizeof(pool, index);
+    if(size == prev_size) return index;
+    if(size < prev_size){  // shrink data
+        new_index = Pool_find_index(pool);
+        if(!new_index) return 0;
+
+        // set the original index to a smaller footprint
+        pool->pointers[index].size = size,
+
+        // update new index for freed data
+        Pool_points_set(pool, new_index);
+        pool->pointers[new_index] = (poolptr) {.size = prev_size - size,
+                                                .ptr = Pool_location(pool, index) + size};
+
+        // mark changes
+        pool->used_bytes -= prev_size - size;
+        return index;
+    } else{  // grow data
+        new_index = Pool_alloc(pool, size);
+        if(!new_index) return 0;
+        Pool_memmove(pool, new_index, index);
+        Pool_free(pool, index);
+        return new_index;
+    }
+}
+
+
 void Pool_free(Pool *pool, tm_index index){
     if(index > TM_MAX_POOL_PTRS || index == 0 || !Pool_filled_bool(pool, index)){
         return;
