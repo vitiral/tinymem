@@ -1,5 +1,10 @@
 #include "tm_defrag.h"
 
+// use the NULL index for data
+#define p_len               ((pool)->pointers[0].size)
+#define p_index             ((pool)->pointers[0].ptr)
+
+
 /*---------------------------------------------------------------------------*/
 /**     Sorting Functions (internal use)                                     */
 
@@ -61,18 +66,8 @@ void bubble_sort(Pool *pool, tm_index_t *array, tm_index_t len){
 }
 
 
-/*---------------------------------------------------------------------------*/
-/**     Defragmentation Functions                                            */
-
-bool Pool_defrag_full(Pool *pool){
-    tm_index_t prev_index, index, i;
-    tm_index_t len = 0;
-    Pool_status_set(pool, TM_DEFRAG_IP);
-    Pool_status_clear(pool, TM_DEFRAG | TM_DEFRAG_FULL);
-
-    pool->used_bytes = 1;
-    pool->used_pointers = 1;
-
+tm_index_t Pool_filled_sort(Pool *pool){
+    tm_index_t index, len = 0;
     // this function completely deallocates -- there are no freed values or anything
     // else in the upool
     Pool_upool_clear(pool);
@@ -84,12 +79,43 @@ bool Pool_defrag_full(Pool *pool){
             len++;
         }
     }
-    if(! len){
+    if(!len){
         pool->heap = 1;
         return false;
     }
 
     heap_sort(pool, (tm_index_t *)pool->upool, len);  // kind of a pun, sorting the heap... haha
+    return len;
+}
+
+/*---------------------------------------------------------------------------*/
+/**     Defragmentation Functions                                            */
+
+
+/**
+ *  Notes:
+ *      Returns 0 when done, 1 when not done (in threaded mode)
+ */
+int8_t Pool_defrag_full(Pool *pool){
+    tm_index_t index;
+
+    if(!Pool_status(pool, TM_DEFRAG_FULL_IP))   goto NOT_STARTED;
+    else if(pool->used_pointers == 1)           goto STARTED;
+    else                                        goto THREAD_LOOP;
+
+NOT_STARTED:
+
+    Pool_status_set(pool, TM_DEFRAG_FULL_IP);
+    Pool_status_clear(pool, TM_DEFRAG | TM_DEFRAG_FULL);
+
+    p_len = Pool_filled_sort(pool);
+
+    pool->used_bytes = 1;
+    pool->used_pointers = 1;
+
+    if(!p_len) return 0;  // there were no filled indexes, done
+
+STARTED:
 
     // we now have sorted indexes by location. We just need to
     // move all memory to the left
@@ -102,23 +128,24 @@ bool Pool_defrag_full(Pool *pool){
     pool->used_bytes += Pool_sizeof(pool, index);
     pool->used_pointers++;
 
-    prev_index = index;
+    p_index = index;
     // rest of memory is packeduse2
-    for(i=1; i<len; i++){
-        index = Pool_upool_get_index(pool, i);
+    for(pool->temp=1; pool->temp<p_len; pool->temp++){
+THREAD_LOOP:
+        index = Pool_upool_get_index(pool, pool->temp);
         memmove(
-            Pool_void(pool, prev_index) + Pool_sizeof(pool, prev_index),
+            Pool_void(pool, p_index) + Pool_sizeof(pool, p_index),
             Pool_void(pool, index),
             Pool_sizeof(pool, index)
         );
-        Pool_location_set(pool, index, Pool_location(pool, prev_index) + Pool_sizeof(pool, prev_index));
+        Pool_location_set(pool, index, Pool_location(pool, p_index) + Pool_sizeof(pool, p_index));
         pool->used_bytes += Pool_sizeof(pool, index);
         pool->used_pointers++;
-        prev_index = index;
+        p_index = index;
     }
 
     // heap can now move left
     pool->heap = Pool_location(pool, index) + Pool_sizeof(pool, index);
-    Pool_status_clear(pool, TM_DEFRAG_IP);
-    return true;
+    Pool_status_clear(pool, TM_DEFRAG_FULL_IP);
+    return 0;
 }

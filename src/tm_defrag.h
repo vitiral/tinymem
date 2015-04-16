@@ -17,7 +17,7 @@
 /**
  * \brief           perform a full (non-threaded) defragmentation of pool
  */
-bool            Pool_defrag_full(Pool *pool);
+int8_t            Pool_defrag_full(Pool *pool);
 
 
 #endif

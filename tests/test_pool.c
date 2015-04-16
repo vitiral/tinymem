@@ -159,7 +159,7 @@ char *test_tm_pool_defrag_full(){
     mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - 1 - calculated_use, "fdefrag heap left 2");
     mu_assert(Pool_available(pool) == TM_POOL_SIZE - 1 - 20200, "fdefrag available 2");
 
-    Pool_defrag_full(pool);
+    while(Pool_defrag_full(pool));
 
     mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - 20200 - 1, "fdefrag heap left 3");
     mu_assert(Pool_available(pool) == TM_POOL_SIZE - 20200 - 1, "defrag available 3");
