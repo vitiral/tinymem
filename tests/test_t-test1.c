@@ -26,7 +26,7 @@ tm_index tm_calloc(tm_size num, tm_size size){
 
 /* Testing level. Should a memcheck be done?*/
 #ifndef TEST
-#define TEST 0
+#define TEST 1
 #endif
 
 #define N_TOTAL     500
@@ -227,31 +227,40 @@ static pthread_mutex_t finish_mutex;
 
 static void mem_init(tm_index index, size_t size)
 {
-    size_t i, j;
+    tm_size i, j;
     unsigned char *ptr = tm_uint8_p(index);
+    /*printf("ptr=%u\n", ptr);*/
 
     if (!size) return;
     for (i = 0; i < size; i += 2047)
     {
-        j = (size_t)ptr ^ i;
+        j = (tm_size)index ^ i;
         ptr[i] = j ^ (j>>8);
     }
-    j = (size_t)ptr ^ (size - 1);
+    j = (tm_size)index ^ (size - 1);
     ptr[size-1] = j ^ (j>>8);
 }
 
 static int mem_check(tm_index index, size_t size)
 {
-    size_t i, j;
+    tm_size i, j;
+    if(size != tm_sizeof(index)){
+        printf("%u == %u\n", size, tm_sizeof(index));
+        return 0;
+    } else if(!tm_valid(index)){
+        printf("index is invalid: %u\n", index);
+        return 0;
+    }
+
     unsigned char *ptr = tm_uint8_p(index);
 
     if (!size) return 0;
     for (i = 0; i < size; i += 2047)
     {
-        j = (size_t)ptr ^ i;
+        j = (tm_size)index ^ i;
         if (ptr[i] != ((j ^ (j>>8)) & 0xFF)) return 1;
     }
-    j = (size_t)ptr ^ (size - 1);
+    j = (tm_size)index ^ (size - 1);
     if (ptr[size-1] != ((j ^ (j>>8)) & 0xFF)) return 2;
     return 0;
 }
@@ -279,6 +288,8 @@ static int zero_check(tm_index index, size_t size)
 
 #endif /* TEST > 0 */
 
+uint16_t testi = 0;
+
 /*
  * Allocate a bin with malloc(), realloc() or memalign().
  * r must be a random number >= 1024.
@@ -287,6 +298,7 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
 {
     uint8_t *ptr;
 #if TEST > 0
+    printf("allocating testi=%u\n", testi++);
     if (mem_check(m->index, m->size))
     {
         printf("memory corrupt!\n");
@@ -295,15 +307,19 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
 #endif
     r %= 1024;
 
-    if (r < 4)
+    /*if (r < 4)*/
+    if(0) // memalign not supported
     {
         /* memalign */
+        printf("using memalign\n");
         if (m->size > 0) tm_free(m->index);
         m->index = memalign(sizeof(int) << r, size);
+        /*m->index = tm_alloc(size);*/
     }
     else if (r < 20)
     {
         /* calloc */
+        printf("using calloc\n");
         if (m->size > 0) tm_free(m->index);
         m->index = tm_calloc(size, 1);
 #if TEST > 0
@@ -321,9 +337,10 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
 #endif
     }
     /*else if ((r < 100) && (m->size < REALLOC_MAX))*/
-    else if(0)
+    else if(0)  // realloc not yet supported
     {
         /* realloc */
+        printf("using realloc\n");
         if (!m->size) m->index = 0;
         m->index = tm_realloc(m->index, size);
         if(!m->index) printf("realloc failed!\n");
@@ -331,6 +348,7 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
     else
     {
         /* malloc */
+        printf("using malloc\n");
         if (m->size > 0) tm_free(m->index);
         m->index = tm_alloc(size);
     }
@@ -340,9 +358,22 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
         tm_print_stats();
         exit(1);
     }
+    if (size != tm_sizeof(m->index))
+    {
+        printf("incorrect size(expected=%d, size=%ld)!\n", size, tm_sizeof(m->index));
+        tm_print_stats();
+        exit(1);
+    }
+    if (!tm_valid(m->index))
+    {
+        printf("incorrect size(expected=%d, size=%ld)!\n", size, tm_sizeof(m->index));
+        tm_print_stats();
+        exit(1);
+    }
 
     m->size = size;
 #if TEST > 0
+    printf("m->index=%u\n", m->index);
     mem_init(m->index, m->size);
 #endif
 }
