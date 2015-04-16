@@ -27,6 +27,7 @@ inline tm_size tm_sizeof(tm_index index){
 }
 
 inline bool tm_valid(tm_index index){
+    if(!index || index >= TM_POOL_SIZE) return false;
     return Pool_filled_bool(&pool, index);
 }
 
