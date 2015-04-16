@@ -28,5 +28,6 @@ tm_index_t    LIA_pop(Pool *pool, tm_index_t *last, tm_size_t size);
  * \brief           For debugging and testing
  */
 bool LIA_valid(Pool *pool, tm_index_t uindex);
+bool Pool_freed_isvalid(Pool *pool);
 
 #endif

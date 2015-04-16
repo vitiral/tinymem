@@ -83,7 +83,7 @@ inline bool tm_valid(tm_index_t index);
  *                  bit name
  * \return          status bits coresponding to name
  */
-//inline uint8_t tm_status(tm_index_t poolid, uint8_t name);
+inline uint8_t tm_status(tm_index_t poolid, uint8_t name);
 
 /*---------------------------------------------------------------------------*/
 /**

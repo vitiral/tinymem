@@ -71,7 +71,7 @@ typedef struct {
     tm_size_t heap;                       //!< location of completely free memory
     tm_size_t stack;                      //!< used for tempalloc and tempfree, similar to standard stack
     tm_size_t used_bytes;                 //!< total amount of data in use out of size (does not include freed)
-    tm_size_t used_pointers;              //!< total amount of pointers used (does not include freed)
+    tm_index_t used_pointers;             //!< total amount of pointers used (does not include freed)
     tm_index_t filled_index;              //!< faster lookup of full pointers for defragmentation
     tm_index_t points_index;              //!< faster lookup for unused pointers for allocation
     tm_size_t uheap;                      //!< heap of the upool
@@ -202,7 +202,13 @@ typedef struct {
 /**
  * \brief           cast a void pointer of location
  */
-#define Pool_location_void(p, loc)           ((void*)(p)->pool + (loc))    // pointer of location
+#define Pool_location_void(p, loc)           ((void*)(p)->pool + (loc))
+
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           initialize (or reset) a pool
+ */
+void            Pool_init(Pool *pool);
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -264,9 +270,9 @@ inline void*    Pool_void(Pool *pool, tm_index_t index);
 /**
  * \brief           upool allocation and freeing. Used for internal methods
  */
-tm_index_t Pool_ualloc(Pool *pool, tm_size_t size);
+tm_index_t Pool_ualloc(Pool *pool, tm_index_t size);
 bool Pool_ufree(Pool *pool, tm_index_t index);
-inline void *Pool_uvoid(Pool *pool, tm_index_t index);
+inline void *Pool_uvoid(Pool *pool, tm_index_t location);
 #define Pool_upool_get_index(pool, index)  (((tm_index_t *)((pool)->upool))[index])
 #define Pool_upool_set_index(pool, index, value)  (((tm_index_t *)((pool)->upool))[index] = value)
 #define Pool_uheap_left(pool)           (pool->ustack - pool->uheap)

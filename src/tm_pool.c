@@ -3,8 +3,6 @@
 #include "tm_pool.h"
 #include "tm_freed.h"
 
-
-
 /*---------------------------------------------------------------------------*/
 /* Pool Methods                                                              */
 
@@ -69,7 +67,7 @@ tm_index_t Pool_find_index(Pool *pool){
 }
 
 
-tm_index_t Pool_alloc(Pool *pool, tm_index_t size){
+tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
     tm_index_t index = Pool_freed_getsize(pool, size);
     if(index){
         if(!Pool_points_bool(pool, index)){
@@ -179,7 +177,7 @@ void Pool_free(Pool *pool, tm_index_t index){
 /*---------------------------------------------------------------------------*/
 /* upool allocation and freeing. (internal use)                              */
 
-tm_index_t Pool_ualloc(Pool *pool, tm_size_t size){
+tm_index_t Pool_ualloc(Pool *pool, tm_index_t size){
     // The upool ASSUMES that all blocks are the same size. Make sure this is always true.
     tm_index_t location;
 
@@ -195,12 +193,12 @@ tm_index_t Pool_ualloc(Pool *pool, tm_size_t size){
 }
 
 
-bool Pool_ufree(Pool *pool, tm_index_t location){
+bool Pool_ufree(Pool *pool, tm_index_t uindex){
     if(Pool_uheap_left(pool) < 2){
         return false;
     }
     pool->ustack-=2;
-    Pool_upool_set_index(pool, pool->ustack / 2, location);
+    Pool_upool_set_index(pool, pool->ustack / 2, uindex);
     return true;
 }
 
