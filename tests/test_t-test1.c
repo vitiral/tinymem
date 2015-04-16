@@ -596,6 +596,8 @@ int main(int argc, char *argv[])
     size_t size = MSIZE;
     struct thread_st *st;
 
+    tm_init();
+
     if (argc > 1) n_total_max = atoi(argv[1]);
     if (n_total_max < 1) n_thr = 1;
     if (argc > 2) n_thr = atoi(argv[2]);

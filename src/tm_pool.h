@@ -86,6 +86,11 @@ typedef struct {
 
 
 /*---------------------------------------------------------------------------*/
+/** Pool extra methods                                                       */
+#include "tm_defrag.h"
+
+
+/*---------------------------------------------------------------------------*/
 /**
  * \brief           Internal use only. Declares Pool with as many initial
  *                  values as possible
@@ -102,18 +107,7 @@ typedef struct {
     .filled = {0},                      \
     .points = {1},                      \
     .pointers = {{1, 0}},               \
-    .upool = {0},                       \
-    .freed = TM_FREED_BINS_DECLARE,     \
 })
-
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           Speeds up declaration of Freed Bins
- */
-#define TM_FREED_BINS_DECLARE   {TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR,  \
-                                 TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR,  \
-                                 TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR,  \
-                                 TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR, TM_UPOOL_ERROR}
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -123,6 +117,7 @@ typedef struct {
  * \return tm_size  available space in bytes
  */
 #define Pool_available(pool)            (TM_POOL_SIZE - (pool)->used_bytes)
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Pool available pointers
@@ -130,34 +125,40 @@ typedef struct {
  * \return tm_size  available pointer spaces
  */
 #define Pool_pointers_left(pool)        (TM_MAX_POOL_PTRS - (pool)->used_pointers)
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Memory remaining on the heap
  * \return tm_size  Number of bytes remaining on the heap
  */
 #define Pool_heap_left(p)            ((p)->stack - (p)->heap)
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Get the sizeof data at index in bytes
  * \return tm_size  the sizeof the data pointed to by index
  */
 #define Pool_sizeof(p, index)        ((p)->pointers[index].size) // get size of data at index
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Get the status bit (0 or 1) of name
  * \return uint8_t  status bit
  */
 #define Pool_status(p, name)         (((p)->pool[0]) & (name))
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Set the pool status of name to 1
  */
 #define Pool_status_set(p, name)     ((p)->pool[0] |= (name))
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Set the pool status of name to 0
  */
 #define Pool_status_clear(p, name)   ((p)->pool[0] &= ~(name))
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Convinience functions
@@ -172,6 +173,7 @@ typedef struct {
 #define Pool_points_bool(pool, index)   ((pool)->points[Pool_filled_index(index)] & Pool_filled_bit(index))
 #define Pool_points_set(pool, index)    ((pool)->points[Pool_filled_index(index)] |=  Pool_filled_bit(index))
 #define Pool_points_clear(pool, index)  ((pool)->points[Pool_filled_index(index)] &= ~Pool_filled_bit(index))
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           move memory from location at index_from to location at
@@ -182,17 +184,20 @@ typedef struct {
             Pool_void(pool, index_from),                                \
             Pool_sizeof(pool, index_from)                               \
         )
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           location of index
  * \return tm_size  location in relation to pool.pool
  */
 #define Pool_location(pool, index)              ((pool)->pointers[index].ptr)  // location of pointer inside pool
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           set location of index to loc
  */
 #define Pool_location_set(pool, index, loc)     (Pool_location(pool, index) = loc)
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           cast a void pointer of location
@@ -205,11 +210,13 @@ typedef struct {
  * \return *Pool
  */
 Pool*           Pool_new();
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           delete (free) Pool object
  */
 #define Pool_del(pool)  (free(pool))
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           allocate memory from pool
@@ -219,6 +226,7 @@ Pool*           Pool_new();
  *                  On error or if not enough memory, return value == 0
  */
 tm_index        Pool_alloc(Pool *pool, tm_size size);
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           changes the size of memory in the pool
@@ -234,6 +242,7 @@ tm_index        Pool_alloc(Pool *pool, tm_size size);
  *                  (or index has been freed if size=0)
  */
 tm_index        Pool_realloc(Pool *pool, tm_index index, tm_size size);
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           free allocated memory from pool
@@ -241,11 +250,7 @@ tm_index        Pool_realloc(Pool *pool, tm_index index, tm_size size);
  * \param index     tm_index to free
  */
 void            Pool_free(Pool *pool, tm_index index);
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           perform a full (non-threaded) defragmentation of pool
- */
-bool            Pool_defrag_full(Pool *pool);
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           cast a void pointer from index
@@ -272,6 +277,7 @@ inline void *Pool_uvoid(Pool *pool, tm_index index);
  * \brief           clear upool (loosing all data)
  */
 void Pool_upool_clear(Pool *pool);
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           clear freed array (loosing all data)

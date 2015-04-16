@@ -6,8 +6,7 @@
 Pool pool = Pool_declare();
 
 void tm_init(){
-    pool = Pool_declare();
-    Pool_freed_reset(&pool);
+    Pool_init(&pool);
 }
 
 inline tm_index tm_alloc(tm_size size){
