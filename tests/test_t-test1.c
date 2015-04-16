@@ -9,8 +9,11 @@
  * Steven Fuerst 2009
  */
 
+// #define DEBUG
+
 #include "tinymem.h"
 #include "tm_pool.h"
+
 /* calloc function not defined in tinymem */
 tm_index tm_calloc(tm_size num, tm_size size){
     tm_index index = tm_alloc(num * size);
@@ -169,6 +172,12 @@ typedef int pthread_t;
 #endif
 #include <stdio.h>
 
+#ifdef DEBUG
+#define DEBUG_printf(...)       printf(__VA_ARGS__)
+#else
+#define DEBUG_printf(...)
+#endif
+
 #ifdef __GCC__
 #include <unistd.h>
 #include <sys/time.h>
@@ -229,7 +238,7 @@ static void mem_init(tm_index index, size_t size)
 {
     tm_size i, j;
     unsigned char *ptr = tm_uint8_p(index);
-    /*printf("ptr=%u\n", ptr);*/
+    /*DEBUG_printf("ptr=%u\n", ptr);*/
 
     if (!size) return;
     for (i = 0; i < size; i += 2047)
@@ -241,20 +250,27 @@ static void mem_init(tm_index index, size_t size)
     ptr[size-1] = j ^ (j>>8);
 }
 
-static int mem_check(tm_index index, size_t size)
+static int mem_check(tm_index index, tm_size size)
 {
     tm_size i, j;
-    if(size != tm_sizeof(index)){
-        printf("%u == %u\n", size, tm_sizeof(index));
-        return 0;
-    } else if(!tm_valid(index)){
-        printf("index is invalid: %u\n", index);
+    // TODO: index==0 was not there before but is necessary -- how is this getting in?
+    if(size == 0 || index == 0){
         return 0;
     }
+    DEBUG_printf("checking index=%u, size=%u\n", index, size);
+
+    /*if(size != tm_sizeof(index)){*/
+    /*    DEBUG_printf("[Error] size is wrong:%u != %u\n", size, tm_sizeof(index));*/
+    /*    return 3;*/
+    /*} */
+    // TODO: It appears that they use invalid (freed) indexes in their mem_check?
+    /*if(!tm_valid(index)){*/
+    /*    DEBUG_printf("[Error] index is invalid: %u\n", index);*/
+    /*    return 4;*/
+    /*}*/
 
     unsigned char *ptr = tm_uint8_p(index);
 
-    if (!size) return 0;
     for (i = 0; i < size; i += 2047)
     {
         j = (tm_size)index ^ i;
@@ -298,10 +314,10 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
 {
     uint8_t *ptr;
 #if TEST > 0
-    printf("allocating testi=%u\n", testi++);
+    DEBUG_printf("allocating testi=%u. Original: index=%u, size=%u\n", testi++, m->index, m->size);
     if (mem_check(m->index, m->size))
     {
-        printf("memory corrupt!\n");
+        DEBUG_printf("memory corrupt!\n");
         exit(1);
     }
 #endif
@@ -311,7 +327,7 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
     if(0) // memalign not supported
     {
         /* memalign */
-        printf("using memalign\n");
+        DEBUG_printf("using memalign\n");
         if (m->size > 0) tm_free(m->index);
         m->index = memalign(sizeof(int) << r, size);
         /*m->index = tm_alloc(size);*/
@@ -319,7 +335,7 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
     else if (r < 20)
     {
         /* calloc */
-        printf("using calloc\n");
+        DEBUG_printf("using calloc\n");
         if (m->size > 0) tm_free(m->index);
         m->index = tm_calloc(size, 1);
 #if TEST > 0
@@ -331,7 +347,7 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
             {
                 if (ptr[i]) break;
             }
-            printf("calloc'ed memory non-zero (index=%p, i=%ld)!\n", m->index, i);
+            DEBUG_printf("calloc'ed memory non-zero (index=%p, i=%ld)!\n", m->index, i);
             exit(1);
         }
 #endif
@@ -340,40 +356,40 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
     else if(0)  // realloc not yet supported
     {
         /* realloc */
-        printf("using realloc\n");
+        DEBUG_printf("using realloc\n");
         if (!m->size) m->index = 0;
         m->index = tm_realloc(m->index, size);
-        if(!m->index) printf("realloc failed!\n");
+        if(!m->index) DEBUG_printf("realloc failed!\n");
     }
     else
     {
         /* malloc */
-        printf("using malloc\n");
+        DEBUG_printf("using malloc\n");
         if (m->size > 0) tm_free(m->index);
         m->index = tm_alloc(size);
     }
     if (!m->index)
     {
-        printf("out of memory (r=%d, size=%ld)!\n", r, (unsigned long)size);
+        DEBUG_printf("out of memory (r=%d, size=%ld)!\n", r, (unsigned long)size);
         tm_print_stats();
         exit(1);
     }
     if (size != tm_sizeof(m->index))
     {
-        printf("incorrect size(expected=%d, size=%ld)!\n", size, tm_sizeof(m->index));
+        DEBUG_printf("incorrect size(expected=%d, size=%ld)!\n", size, tm_sizeof(m->index));
         tm_print_stats();
         exit(1);
     }
     if (!tm_valid(m->index))
     {
-        printf("incorrect size(expected=%d, size=%ld)!\n", size, tm_sizeof(m->index));
+        DEBUG_printf("invalid index (expected=%d, size=%ld)!\n", size, tm_sizeof(m->index));
         tm_print_stats();
         exit(1);
     }
 
     m->size = size;
 #if TEST > 0
-    printf("m->index=%u\n", m->index);
+    DEBUG_printf("m->index=%u\n", m->index);
     mem_init(m->index, m->size);
 #endif
 }
@@ -387,13 +403,14 @@ static void bin_free(struct bin *m)
 #if TEST > 0
     if (mem_check(m->index, m->size))
     {
-        printf("memory corrupt!\n");
+        DEBUG_printf("memory corrupt!\n");
         exit(1);
     }
 #endif
 
     tm_free(m->index);
     m->size = 0;
+    m->index = 0;
 }
 
 struct bin_info
@@ -413,7 +430,7 @@ static void bin_test(struct bin_info *p)
         mybin = (struct bin *)tm_void(p->m);
         if (mem_check(mybin[b].index, mybin[b].size))
         {
-            printf("memory corrupt!\n");
+            DEBUG_printf("memory corrupt!\n");
             exit(1);
         }
     }
@@ -448,15 +465,15 @@ static void malloc_test(void *ptr, size_t stack_len)
     {
         int status;
 
-        printf("forking\n");
+        DEBUG_printf("forking\n");
         pid = fork();
         if (pid > 0)
         {
-            printf("waiting for %d...\n", pid);
+            DEBUG_printf("waiting for %d...\n", pid);
             waitpid(pid, &status, 0);
             if (!WIFEXITED(status))
             {
-                printf("child term with signal %d\n", WTERMSIG(status));
+                DEBUG_printf("child term with signal %d\n", WTERMSIG(status));
             }
             goto end;
         }
@@ -561,12 +578,12 @@ static int my_end_thread(struct thread_st *st)
     }
     else if (st->seed++, my_start_thread(st))
     {
-        printf("Creating thread #%d failed.\n", n_total);
+        DEBUG_printf("Creating thread #%d failed.\n", n_total);
     }
     else
     {
         n_total++;
-        if (!(n_total%N_TOTAL_PRINT)) printf("n_total = %d\n", n_total);
+        if (!(n_total%N_TOTAL_PRINT)) DEBUG_printf("n_total = %d\n", n_total);
     }
     return 0;
 }
@@ -590,11 +607,8 @@ int main(int argc, char *argv[])
     if (size < 2) size = 2;
 
     bins = MEMORY  /(size * n_thr);
-    printf("MEMORY=%u\n", MEMORY);
-    printf("bins want=%u\n", bins);
     if (argc > 5) bins = atoi(argv[5]);
     if (bins < 4) bins = 4;
-    printf("bins have=%u\n", bins);
 
 #if USE_PTHREADS
     printf("Using posix threads.\n");
@@ -605,11 +619,11 @@ int main(int argc, char *argv[])
 #elif USE_SPROC
     printf("Using sproc() threads.\n");
 #else
-    printf("No threads.. n_thr=%u\n", n_thr);
+    printf("No threads.\n");
 #endif
 
-    printf("total=%d threads=%d i_max=%d size=%ld bins=%d\n",
-           n_total_max, n_thr, i_max, size, bins);
+    printf("mem=%u, total=%d threads=%d i_max=%d size=%ld bins=%d\n",
+           MEMORY, n_total_max, n_thr, i_max, size, bins);
 
     st = malloc(n_thr * sizeof(*st));
     if (!st) exit(-1);
@@ -700,7 +714,6 @@ int main(int argc, char *argv[])
 #else /* NO_THREADS */
         printf("ending threads\n");
         for (i = 0; i < n_thr; i++) my_end_thread(&st[i]);
-        printf("doing something else?\n");
         break;
 #endif
     }
