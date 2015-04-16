@@ -5,23 +5,23 @@
 
 /*#define tmdebug(...)*/
 
-tm_size mem_used;
+tm_size_t mem_used;
 
 #define TABLE_STANDIN       (NULL)
 #define HASH_PRIME          (1677619)
 #define MAXPTRS             (TM_MAX_POOL_PTRS - 1)
 #define mem_free            (TM_POOL_SIZE - mem_used)
 
-bool alloc_index(tm_index *indexes, tm_index index, tm_size size);
+bool alloc_index(tm_index_t *indexes, tm_index_t index, tm_size_t size);
 
 
-uint8_t index_hash(tm_index value, tm_size i){
+uint8_t index_hash(tm_index_t value, tm_size_t i){
     uint32_t h = (value + i) * HASH_PRIME;
     return ((h>>16) ^ (h & 0xFFFF));
 }
 
-bool check_sizes(tm_index *indexes, tm_index len, tm_size maxlen){
-    tm_index i;
+bool check_sizes(tm_index_t *indexes, tm_index_t len, tm_size_t maxlen){
+    tm_index_t i;
     for(i=0; i<len; i++){
         if(indexes[i]){
             if(!tm_valid(indexes[i])){
@@ -38,10 +38,10 @@ bool check_sizes(tm_index *indexes, tm_index len, tm_size maxlen){
     return true;
 }
 
-bool check_indexes(tm_index *indexes, tm_index len){
+bool check_indexes(tm_index_t *indexes, tm_index_t len){
     // All indexes where index!=0 should be equal to their hash
-    tm_index i, j;
-    tm_size size;
+    tm_index_t i, j;
+    tm_size_t size;
     uint8_t *data;
     for(i=0; i<len; i++){
         if(!indexes[i]) continue;
@@ -61,10 +61,10 @@ bool check_indexes(tm_index *indexes, tm_index len){
     return true;
 }
 
-bool fill_indexes(tm_index *indexes, tm_index len, tm_size maxlen){
+bool fill_indexes(tm_index_t *indexes, tm_index_t len, tm_size_t maxlen){
     // Allocate indexex of size index % mod + 1
-    tm_index i;
-    tm_index filled = 0;
+    tm_index_t i;
+    tm_index_t filled = 0;
     for(i=0; i<len; i++){
         if(!indexes[i]){
             if(!alloc_index(indexes, i, i % maxlen + 1)){
@@ -86,8 +86,8 @@ bool fill_indexes(tm_index *indexes, tm_index len, tm_size maxlen){
     return true;
 }
 
-bool alloc_index(tm_index *indexes, tm_index index, tm_size size){
-    tm_size i;
+bool alloc_index(tm_index_t *indexes, tm_index_t index, tm_size_t size){
+    tm_size_t i;
     uint8_t *data;
     indexes[index] = tm_alloc(size);
     if(!indexes[index]) return false;
@@ -103,7 +103,7 @@ bool alloc_index(tm_index *indexes, tm_index index, tm_size size){
     return true;
 }
 
-bool free_index(tm_index *indexes, tm_index index){
+bool free_index(tm_index_t *indexes, tm_index_t index){
     if(!indexes[index]) return false;
     tm_free(indexes[index]);
     mem_used -= tm_sizeof(indexes[index]);
@@ -113,10 +113,10 @@ bool free_index(tm_index *indexes, tm_index index){
 
 char *test_basic(){
     // first allocate and free to the full extent possible without requiring a defrag
-    const tm_size maxlen = (TM_POOL_SIZE / TM_MAX_POOL_PTRS) * 2;
-    tm_size i;
-    tm_index indexes[MAXPTRS] = {0};
-    tm_index lindexes[1];
+    const tm_size_t maxlen = (TM_POOL_SIZE / TM_MAX_POOL_PTRS) * 2;
+    tm_size_t i;
+    tm_index_t indexes[MAXPTRS] = {0};
+    tm_index_t lindexes[1];
 
     tm_init();
 
@@ -151,12 +151,12 @@ char *test_thrash(){
     // do a sliding scale allocation / free where it starts out that
     // memory is allocated in tiny chunks and then gets more and more
     // allocated into large chunks
-    const tm_size maxlen = (TM_POOL_SIZE / TM_MAX_POOL_PTRS) * 2;
+    const tm_size_t maxlen = (TM_POOL_SIZE / TM_MAX_POOL_PTRS) * 2;
     const big_len = 100;
     uint8_t myhash;
-    tm_index i, ind_i = 0, big_i = 0, temp;
-    tm_index indexes[MAXPTRS] = {0};
-    tm_index big_indexes[big_len];
+    tm_index_t i, ind_i = 0, big_i = 0, temp;
+    tm_index_t indexes[MAXPTRS] = {0};
+    tm_index_t big_indexes[big_len];
     for(i=0;i<big_len;i++) big_indexes[i] = 0;
 
     tm_init();

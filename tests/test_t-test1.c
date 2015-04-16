@@ -15,8 +15,8 @@
 #include "tm_pool.h"
 
 /* calloc function not defined in tinymem */
-tm_index tm_calloc(tm_size num, tm_size size){
-    tm_index index = tm_alloc(num * size);
+tm_index_t tm_calloc(tm_size_t num, tm_size_t size){
+    tm_index_t index = tm_alloc(num * size);
     if(!index) return 0;
     memset(tm_uint8_p(index), 0, num*size);
     return index;
@@ -221,7 +221,7 @@ static inline unsigned rng(void)
 struct bin
 {
     /*unsigned char *ptr;*/
-    tm_index index;
+    tm_index_t index;
     size_t size;
 };
 
@@ -234,25 +234,25 @@ static pthread_mutex_t finish_mutex;
 
 #if TEST > 0
 
-static void mem_init(tm_index index, size_t size)
+static void mem_init(tm_index_t index, size_t size)
 {
-    tm_size i, j;
+    tm_size_t i, j;
     unsigned char *ptr = tm_uint8_p(index);
     /*DEBUG_printf("ptr=%u\n", ptr);*/
 
     if (!size) return;
     for (i = 0; i < size; i += 2047)
     {
-        j = (tm_size)index ^ i;
+        j = (tm_size_t)index ^ i;
         ptr[i] = j ^ (j>>8);
     }
-    j = (tm_size)index ^ (size - 1);
+    j = (tm_size_t)index ^ (size - 1);
     ptr[size-1] = j ^ (j>>8);
 }
 
-static int mem_check(tm_index index, tm_size size)
+static int mem_check(tm_index_t index, tm_size_t size)
 {
-    tm_size i, j;
+    tm_size_t i, j;
     // TODO: index==0 was not there before but is necessary -- how is this getting in?
     if(size == 0 || index == 0){
         return 0;
@@ -273,15 +273,15 @@ static int mem_check(tm_index index, tm_size size)
 
     for (i = 0; i < size; i += 2047)
     {
-        j = (tm_size)index ^ i;
+        j = (tm_size_t)index ^ i;
         if (ptr[i] != ((j ^ (j>>8)) & 0xFF)) return 1;
     }
-    j = (tm_size)index ^ (size - 1);
+    j = (tm_size_t)index ^ (size - 1);
     if (ptr[size-1] != ((j ^ (j>>8)) & 0xFF)) return 2;
     return 0;
 }
 
-static int zero_check(tm_index index, size_t size)
+static int zero_check(tm_index_t index, size_t size)
 {
     void *p = tm_void(index);
     unsigned *ptr = p;
@@ -342,7 +342,7 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
         if (zero_check(m->index, size))
         {
             ptr = tm_uint8_p(m->index);
-            tm_size i;
+            tm_size_t i;
             for (i = 0; i < size; i++)
             {
                 if (ptr[i]) break;
@@ -415,7 +415,7 @@ static void bin_free(struct bin *m)
 
 struct bin_info
 {
-    tm_index m;             // points to `struct bin`
+    tm_index_t m;             // points to `struct bin`
     size_t size, bins;
 };
 

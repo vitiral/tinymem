@@ -6,7 +6,7 @@
 
 
 char *test_tm_pool_new(){
-    tm_index i;
+    tm_index_t i;
     Pool *pool;
 
     pool = Pool_new();
@@ -41,8 +41,8 @@ char *test_tm_pool_alloc(){
     uint8_t i, n;
     uint16_t heap = 1;
     Pool *pool;
-    tm_index index;
-    tm_index indexes[10];
+    tm_index_t index;
+    tm_index_t indexes[10];
     pool = Pool_new();
     mu_assert(pool, "Pool_alloc was malloced");
     index = Pool_alloc(pool, sizeof(uint32_t));
@@ -73,7 +73,7 @@ char *test_tm_pool_alloc(){
 
 
 char *test_tm_pool_realloc(){
-    tm_index index, prev_index, other_index;
+    tm_index_t index, prev_index, other_index;
     uint8_t i, n;
     uint16_t used = 1;
     uint16_t used_ptrs = 1;
@@ -129,10 +129,10 @@ char *test_tm_pool_realloc(){
 
 char *test_tm_pool_defrag_full(){
     uint8_t i, j;
-    tm_index c;
-    tm_index data[201];
-    tm_size used = 0;
-    const tm_size calculated_use = 40200;
+    tm_index_t c;
+    tm_index_t data[201];
+    tm_size_t used = 0;
+    const tm_size_t calculated_use = 40200;
     Pool *pool = Pool_new();
     mu_assert(pool->stack == TM_POOL_SIZE, "new stack");
     mu_assert(pool, "fdefrag new");
@@ -189,8 +189,8 @@ char *test_upool_basic(){
     int value;
     int8_t i;
     int m = 0;
-    tm_index index;
-    tm_index indexes[20];
+    tm_index_t index;
+    tm_index_t indexes[20];
     Pool *pool = Pool_new();
     mu_assert(pool, "upool basic");
     for(i=0; i<20; i++){
@@ -221,8 +221,8 @@ char *test_upool_basic(){
 
 char *test_tm_free_foundation(){
     int8_t i;
-    tm_index result;
-    tm_index lray = TM_UPOOL_ERROR;
+    tm_index_t result;
+    tm_index_t lray = TM_UPOOL_ERROR;
     Pool *pool = Pool_new();
     // Some fake pointers
     pool->pointers[42] = (poolptr) {.size = 4, .ptr = 1};
@@ -274,12 +274,12 @@ char *test_tm_free_basic(){
     int8_t i, j;
     Pool *pool = Pool_new();
     LinkedIndexArray *lia;
-    tm_index used_ptrs;
-    tm_index used_bytes;
-    tm_size heap;
-    tm_size temp;
-    tm_index indexes[100];
-    tm_index index;
+    tm_index_t used_ptrs;
+    tm_index_t used_bytes;
+    tm_size_t heap;
+    tm_size_t temp;
+    tm_index_t indexes[100];
+    tm_index_t index;
     mu_assert(pool, "fbasic sanity");
 
     // allocate a bunch of memory, then free chunks of it.

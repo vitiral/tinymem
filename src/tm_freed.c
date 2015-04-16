@@ -12,20 +12,20 @@
 
 // Designed to create an ultra fast hash with < 256 bins
 // see scripts/hash.py for more details and tests (hash4)
-uint8_t freed_hash(tm_index value){
+uint8_t freed_hash(tm_index_t value){
     uint32_t h = value * HASH_PRIME;
     return ((h>>16) ^ (h & 0xFFFF)) % TM_FREED_BINS;
 }
 
 
-bool Pool_freed_append(Pool *pool, tm_index index){
+bool Pool_freed_append(Pool *pool, tm_index_t index){
     // Indicate that index was freed to freed arrays
     uint8_t findex = freed_hash(Pool_sizeof(pool, index));
     return LIA_append(pool, &(pool->freed[findex]), index);
 }
 
 
-tm_index Pool_freed_getsize(Pool *pool, tm_size size){
+tm_index_t Pool_freed_getsize(Pool *pool, tm_size_t size){
     // Indicate that index was freed to freed arrays
     uint8_t findex = freed_hash(size);
     return LIA_pop(pool, &(pool->freed[findex]), size);
@@ -38,7 +38,7 @@ tm_index Pool_freed_getsize(Pool *pool, tm_size size){
 uint16_t LIA_new(Pool *pool){
     uint8_t i;
     LinkedIndexArray *a;
-    tm_index uindex = Pool_ualloc(pool, sizeof(LinkedIndexArray));
+    tm_index_t uindex = Pool_ualloc(pool, sizeof(LinkedIndexArray));
     if(uindex >= TM_UPOOL_ERROR) return TM_UPOOL_ERROR;
     a = Pool_LIA(pool, uindex);
     a->prev = TM_UPOOL_ERROR + 1;
@@ -49,20 +49,20 @@ uint16_t LIA_new(Pool *pool){
 }
 
 
-bool LIA_del(Pool *pool, tm_index uindex){
+bool LIA_del(Pool *pool, tm_index_t uindex){
     Pool_LIA(pool, uindex)->prev = TM_UPOOL_ERROR;
     return Pool_ufree(pool, uindex);
 }
 
 
-bool LIA_append(Pool *pool, tm_index *last, tm_index value){
+bool LIA_append(Pool *pool, tm_index_t *last, tm_index_t value){
     // Appends a value onto the end of the LIA. If it overflows,
     // moves the *last index to true last if it changes
     // If this returns false it is time to full defrag
     // because free values will be lost otherwise!
     uint8_t i;
     LinkedIndexArray *a;
-    tm_index uindex;
+    tm_index_t uindex;
     if(Pool_status(pool, TM_ANY_DEFRAG)){
         // TODO: for threading some very specific things need to happen here.
         //      Everything is fine for simple
@@ -94,15 +94,15 @@ bool LIA_append(Pool *pool, tm_index *last, tm_index value){
 }
 
 
-tm_index LIA_pop(Pool *pool, tm_index *last, tm_size size){
+tm_index_t LIA_pop(Pool *pool, tm_index_t *last, tm_size_t size){
     // Pops a value off of LIA that meets the size criteria
     // modifies *last if this action causes the last index to get deleted
     uint8_t i, j;
     LinkedIndexArray *a;
-    tm_index final_last_i;
-    tm_index temp;
-    tm_index index = 0;
-    tm_index uindex = *last;
+    tm_index_t final_last_i;
+    tm_index_t temp;
+    tm_index_t index = 0;
+    tm_index_t uindex = *last;
 
     if(Pool_status(pool, TM_ANY_DEFRAG))    return 0;
     if(uindex >= TM_UPOOL_ERROR)            return 0;
@@ -167,8 +167,8 @@ found:
 /* For debugging and testing */
 
 bool Pool_freed_isvalid(Pool *pool){
-    tm_index bin, i;
-    tm_index index;
+    tm_index_t bin, i;
+    tm_index_t index;
     for(bin=0; bin<TM_FREED_BINS; bin++){
         LinkedIndexArray *a = Pool_LIA(pool, pool->freed[bin]);
         if(!a) continue;
@@ -202,8 +202,8 @@ bool Pool_freed_isvalid(Pool *pool){
 }
 
 
-bool LIA_valid(Pool *pool, tm_index uindex){
-    tm_index i;
+bool LIA_valid(Pool *pool, tm_index_t uindex){
+    tm_index_t i;
     LinkedIndexArray *a;
     bool islast = true;
     // check to make sure prev arrays are all full

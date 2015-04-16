@@ -18,8 +18,8 @@
 #define TM_ANY_DEFRAG   (TM_DEFRAG_FULL | TM_DEFRAG | TM_DEFRAG_IP)   // some defrag has been requested
 
 
-typedef uint16_t tm_index;
-typedef uint16_t tm_size;
+typedef uint16_t tm_index_t;
+typedef uint16_t tm_size_t;
 typedef uint8_t tm_status_type;
 
 #endif

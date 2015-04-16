@@ -4,11 +4,11 @@
 /**     Sorting Functions (internal use)                                     */
 
 #define IS_LESS(pool, v1, v2)  (Pool_location(pool, v1) < Pool_location(pool, v2))
-void siftDown(Pool *pool, tm_index *a, int16_t start, int16_t count);
-#define SWAP(r,s)  do{tm_index t=r; r=s; s=t;} while(0)
+void siftDown(Pool *pool, tm_index_t *a, int16_t start, int16_t count);
+#define SWAP(r,s)  do{tm_index_t t=r; r=s; s=t;} while(0)
 
 
-void heap_sort(Pool *pool, tm_index *a, int16_t count){
+void heap_sort(Pool *pool, tm_index_t *a, int16_t count){
     int16_t start, end;
 
     /* heapify */
@@ -23,7 +23,7 @@ void heap_sort(Pool *pool, tm_index *a, int16_t count){
 }
 
 
-void siftDown(Pool *pool, tm_index *a, int16_t start, int16_t end){
+void siftDown(Pool *pool, tm_index_t *a, int16_t start, int16_t end){
     int16_t root = start;
 
     while ( root*2+1 < end ) {
@@ -41,10 +41,10 @@ void siftDown(Pool *pool, tm_index *a, int16_t start, int16_t end){
 }
 
 
-void bubble_sort(Pool *pool, tm_index *array, tm_index len){
+void bubble_sort(Pool *pool, tm_index_t *array, tm_index_t len){
     // sort indexes by location
-    tm_index i, j;
-    tm_index swap;
+    tm_index_t i, j;
+    tm_index_t swap;
     bool workdone = false;
     for (i = 0; i < len; i++){
         workdone = false;
@@ -65,8 +65,8 @@ void bubble_sort(Pool *pool, tm_index *array, tm_index len){
 /**     Defragmentation Functions                                            */
 
 bool Pool_defrag_full(Pool *pool){
-    tm_index prev_index, index, i;
-    tm_index len = 0;
+    tm_index_t prev_index, index, i;
+    tm_index_t len = 0;
     Pool_status_set(pool, TM_DEFRAG_IP);
     Pool_status_clear(pool, TM_DEFRAG | TM_DEFRAG_FULL);
 
@@ -89,7 +89,7 @@ bool Pool_defrag_full(Pool *pool){
         return false;
     }
 
-    heap_sort(pool, (tm_index *)pool->upool, len);  // kind of a pun, sorting the heap... haha
+    heap_sort(pool, (tm_index_t *)pool->upool, len);  // kind of a pun, sorting the heap... haha
 
     // we now have sorted indexes by location. We just need to
     // move all memory to the left

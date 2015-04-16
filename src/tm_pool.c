@@ -30,7 +30,7 @@ void Pool_upool_clear(Pool *pool){
 
 
 void Pool_freed_reset(Pool *pool){
-    tm_index i;
+    tm_index_t i;
     for(i=0; i<TM_FREED_BINS; i++){
         pool->freed[i] = TM_UPOOL_ERROR;
     }
@@ -42,14 +42,14 @@ void Pool_freed_reset(Pool *pool){
     pool->points[i-1]   |= TM_LAST_USED;  // prevent use of values that don't exist
 }
 
-inline void *Pool_void(Pool *pool, tm_index index){
+inline void *Pool_void(Pool *pool, tm_index_t index){
     // get a void pointer to data from pool index.
     if(!index) return NULL;
     return Pool_location_void(pool, Pool_location(pool, index));
 }
 
-tm_index Pool_find_index(Pool *pool){
-    tm_index index, i, b;
+tm_index_t Pool_find_index(Pool *pool){
+    tm_index_t index, i, b;
     unsigned int bit;
     unsigned int *points = (unsigned int *)pool->points;
     for(i=0; i<TM_MAX_FILLED_INT; i++){
@@ -69,8 +69,8 @@ tm_index Pool_find_index(Pool *pool){
 }
 
 
-tm_index Pool_alloc(Pool *pool, tm_index size){
-    tm_index index = Pool_freed_getsize(pool, size);
+tm_index_t Pool_alloc(Pool *pool, tm_index_t size){
+    tm_index_t index = Pool_freed_getsize(pool, size);
     if(index){
         if(!Pool_points_bool(pool, index)){
             tmdebug("ERROR pointer should point, but be unfilled");
@@ -124,9 +124,9 @@ tm_index Pool_alloc(Pool *pool, tm_index size){
 }
 
 
-tm_index Pool_realloc(Pool *pool, tm_index index, tm_size size){
-    tm_index new_index;
-    tm_size prev_size;
+tm_index_t Pool_realloc(Pool *pool, tm_index_t index, tm_size_t size){
+    tm_index_t new_index;
+    tm_size_t prev_size;
 
     if(!index) return Pool_alloc(pool, size);
     if(!Pool_filled_bool(pool, index)) return 0;
@@ -161,7 +161,7 @@ tm_index Pool_realloc(Pool *pool, tm_index index, tm_size size){
 }
 
 
-void Pool_free(Pool *pool, tm_index index){
+void Pool_free(Pool *pool, tm_index_t index){
     if(index > TM_MAX_POOL_PTRS || index == 0 || !Pool_filled_bool(pool, index)){
         return;
     }
@@ -179,9 +179,9 @@ void Pool_free(Pool *pool, tm_index index){
 /*---------------------------------------------------------------------------*/
 /* upool allocation and freeing. (internal use)                              */
 
-tm_index Pool_ualloc(Pool *pool, tm_size size){
+tm_index_t Pool_ualloc(Pool *pool, tm_size_t size){
     // The upool ASSUMES that all blocks are the same size. Make sure this is always true.
-    tm_index location;
+    tm_index_t location;
 
     if(Pool_ustack_used(pool)) {
         // free pointers available
@@ -195,7 +195,7 @@ tm_index Pool_ualloc(Pool *pool, tm_size size){
 }
 
 
-bool Pool_ufree(Pool *pool, tm_index location){
+bool Pool_ufree(Pool *pool, tm_index_t location){
     if(Pool_uheap_left(pool) < 2){
         return false;
     }
@@ -205,7 +205,7 @@ bool Pool_ufree(Pool *pool, tm_index location){
 }
 
 
-inline void *Pool_uvoid(Pool *pool, tm_index location){
+inline void *Pool_uvoid(Pool *pool, tm_index_t location){
     if(location >= TM_UPOOL_ERROR) return NULL;
     return pool->upool + location;
 }

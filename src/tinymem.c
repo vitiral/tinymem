@@ -9,32 +9,32 @@ void tm_init(){
     Pool_init(&pool);
 }
 
-inline tm_index tm_alloc(tm_size size){
+inline tm_index_t tm_alloc(tm_size_t size){
     return Pool_alloc(&pool, size);
 }
 
-inline tm_index tm_realloc(tm_index index, tm_size size){
+inline tm_index_t tm_realloc(tm_index_t index, tm_size_t size){
     return Pool_realloc(&pool, index, size);
 }
 
-inline void tm_free(tm_index index){
+inline void tm_free(tm_index_t index){
     return Pool_free(&pool, index);
 }
 
-inline tm_size tm_sizeof(tm_index index){
+inline tm_size_t tm_sizeof(tm_index_t index){
     return Pool_sizeof(&pool, index);
 }
 
-inline bool tm_valid(tm_index index){
+inline bool tm_valid(tm_index_t index){
     if(!index || index >= TM_POOL_SIZE) return false;
     return Pool_filled_bool(&pool, index);
 }
 
-inline uint8_t tm_status(tm_index poolid, uint8_t name){
+inline uint8_t tm_status(tm_index_t poolid, uint8_t name){
     return Pool_status(&pool, name);
 }
 
-inline void*  tm_void(tm_index index){
+inline void*  tm_void(tm_index_t index){
     return Pool_void(&pool, index);
 }
 

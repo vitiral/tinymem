@@ -28,7 +28,7 @@
 /**
  * \brief           Internal Definitions based on platform
  */
-#define TM_UPOOL_SIZE           (TM_MAX_POOL_PTRS * sizeof(tm_index))
+#define TM_UPOOL_SIZE           (TM_MAX_POOL_PTRS * sizeof(tm_index_t))
 #define TM_UPOOL_ERROR          (TM_UPOOL_SIZE + 1)
 #define TM_MAX_FILLED_PTRS      (TM_MAX_POOL_PTRS / 8 + (TM_MAX_POOL_PTRS % 8 ? 1:0))
 #define TM_MAX_FILLED_INT       (TM_MAX_FILLED_PTRS / sizeof(int) + \
@@ -56,8 +56,8 @@
  * \brief           poolptr is used by Pool to track memory location and size
  */
 typedef struct {
-    tm_size size;
-    tm_size ptr;
+    tm_size_t size;
+    tm_size_t ptr;
 } poolptr;
 #define NULL_poolptr            ((poolptr){.size=0, .ptr=0})
 
@@ -68,19 +68,19 @@ typedef struct {
  *                  management
  */
 typedef struct {
-    tm_size heap;                       //!< location of completely free memory
-    tm_size stack;                      //!< used for tempalloc and tempfree, similar to standard stack
-    tm_size used_bytes;                 //!< total amount of data in use out of size (does not include freed)
-    tm_size used_pointers;              //!< total amount of pointers used (does not include freed)
-    tm_index filled_index;              //!< faster lookup of full pointers for defragmentation
-    tm_index points_index;              //!< faster lookup for unused pointers for allocation
-    tm_size uheap;                      //!< heap of the upool
-    tm_size ustack;                     //!< stack of the upool
+    tm_size_t heap;                       //!< location of completely free memory
+    tm_size_t stack;                      //!< used for tempalloc and tempfree, similar to standard stack
+    tm_size_t used_bytes;                 //!< total amount of data in use out of size (does not include freed)
+    tm_size_t used_pointers;              //!< total amount of pointers used (does not include freed)
+    tm_index_t filled_index;              //!< faster lookup of full pointers for defragmentation
+    tm_index_t points_index;              //!< faster lookup for unused pointers for allocation
+    tm_size_t uheap;                      //!< heap of the upool
+    tm_size_t ustack;                     //!< stack of the upool
     uint8_t filled[TM_MAX_FILLED_PTRS]; //!< bit array of filled pointers (only used, not freed)
     uint8_t points[TM_MAX_FILLED_PTRS]; //!< bit array of used pointers (both used and freed)
     poolptr pointers[TM_MAX_POOL_PTRS]; //!< size and location of data in pool
     uint8_t  upool[TM_UPOOL_SIZE];      //!< extra space for processing and storing freed pointers
-    tm_index freed[TM_FREED_BINS];      //!< binned storage of all freed indexes (uses upool)
+    tm_index_t freed[TM_FREED_BINS];      //!< binned storage of all freed indexes (uses upool)
     uint8_t pool[TM_POOL_SIZE];         //!< Actual memory pool (very large)
 } Pool;
 
@@ -114,7 +114,7 @@ typedef struct {
  * \brief           Pool available memory (both heap and inside freed)
  *                  This is how much space is left to allocate after a full
  *                  defragmentation
- * \return tm_size  available space in bytes
+ * \return tm_size_t  available space in bytes
  */
 #define Pool_available(pool)            (TM_POOL_SIZE - (pool)->used_bytes)
 
@@ -122,21 +122,21 @@ typedef struct {
 /**
  * \brief           Pool available pointers
  *                  This is how many more objects can be allocated
- * \return tm_size  available pointer spaces
+ * \return tm_size_t  available pointer spaces
  */
 #define Pool_pointers_left(pool)        (TM_MAX_POOL_PTRS - (pool)->used_pointers)
 
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Memory remaining on the heap
- * \return tm_size  Number of bytes remaining on the heap
+ * \return tm_size_t  Number of bytes remaining on the heap
  */
 #define Pool_heap_left(p)            ((p)->stack - (p)->heap)
 
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Get the sizeof data at index in bytes
- * \return tm_size  the sizeof the data pointed to by index
+ * \return tm_size_t  the sizeof the data pointed to by index
  */
 #define Pool_sizeof(p, index)        ((p)->pointers[index].size) // get size of data at index
 
@@ -188,7 +188,7 @@ typedef struct {
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           location of index
- * \return tm_size  location in relation to pool.pool
+ * \return tm_size_t  location in relation to pool.pool
  */
 #define Pool_location(pool, index)              ((pool)->pointers[index].ptr)  // location of pointer inside pool
 
@@ -222,17 +222,17 @@ Pool*           Pool_new();
  * \brief           allocate memory from pool
  * \param pool      pointer to Pool struct
  * \param size      size of pointer to allocate
- * \return          tm_index corresponding to memory location
+ * \return          tm_index_t corresponding to memory location
  *                  On error or if not enough memory, return value == 0
  */
-tm_index        Pool_alloc(Pool *pool, tm_size size);
+tm_index_t        Pool_alloc(Pool *pool, tm_size_t size);
 
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           changes the size of memory in the pool
  *                  See standard documentation on realloc for more info
  * \param pool      pointer to Pool struct
- * \param index     tm_index to realloc
+ * \param index     tm_index_t to realloc
  *                  If 0: acts as tm_alloc(size)
  * \param size      new requested size of index
  *                  If 0: acts as tm_free(index)
@@ -241,34 +241,34 @@ tm_index        Pool_alloc(Pool *pool, tm_size size);
  *                  If return value == 0, then no change has been done
  *                  (or index has been freed if size=0)
  */
-tm_index        Pool_realloc(Pool *pool, tm_index index, tm_size size);
+tm_index_t        Pool_realloc(Pool *pool, tm_index_t index, tm_size_t size);
 
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           free allocated memory from pool
  * \param pool      pointer to Pool struct
- * \param index     tm_index to free
+ * \param index     tm_index_t to free
  */
-void            Pool_free(Pool *pool, tm_index index);
+void            Pool_free(Pool *pool, tm_index_t index);
 
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           cast a void pointer from index
  * \param pool      pointer to Pool struct
- * \param index     tm_index to get pointer to
+ * \param index     tm_index_t to get pointer to
  * \return          void* pointer to actual data
  */
-inline void*    Pool_void(Pool *pool, tm_index index);
+inline void*    Pool_void(Pool *pool, tm_index_t index);
 
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           upool allocation and freeing. Used for internal methods
  */
-tm_index Pool_ualloc(Pool *pool, tm_size size);
-bool Pool_ufree(Pool *pool, tm_index index);
-inline void *Pool_uvoid(Pool *pool, tm_index index);
-#define Pool_upool_get_index(pool, index)  (((tm_index *)((pool)->upool))[index])
-#define Pool_upool_set_index(pool, index, value)  (((tm_index *)((pool)->upool))[index] = value)
+tm_index_t Pool_ualloc(Pool *pool, tm_size_t size);
+bool Pool_ufree(Pool *pool, tm_index_t index);
+inline void *Pool_uvoid(Pool *pool, tm_index_t index);
+#define Pool_upool_get_index(pool, index)  (((tm_index_t *)((pool)->upool))[index])
+#define Pool_upool_set_index(pool, index, value)  (((tm_index_t *)((pool)->upool))[index] = value)
 #define Pool_uheap_left(pool)           (pool->ustack - pool->uheap)
 #define Pool_ustack_used(pool)          (TM_UPOOL_SIZE - pool->ustack)
 
