@@ -106,7 +106,7 @@ int8_t Pool_defrag_full(Pool *pool){
 NOT_STARTED:
 
     Pool_status_set(pool, TM_DEFRAG_FULL_IP);
-    Pool_status_clear(pool, TM_DEFRAG | TM_DEFRAG_FULL);
+    Pool_status_clear(pool, TM_DEFRAG_FAST | TM_DEFRAG_FULL);
 
     p_len = Pool_filled_sort(pool);
 

@@ -11,7 +11,7 @@
  *                      >=1 -- Simple threading. Simply make calls to tm_thread
  *                                  in your main loop
  */
-#define TM_THREADED     1
+#define TM_THREADED     0
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           number of memory pools to create

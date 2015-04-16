@@ -63,11 +63,12 @@ bool LIA_append(Pool *pool, tm_index_t *last, tm_index_t value){
     uint8_t i;
     LinkedIndexArray *a;
     tm_index_t uindex;
-    if(Pool_status(pool, TM_ANY_DEFRAG)){
-        // TODO: for threading some very specific things need to happen here.
-        //      Everything is fine for simple
-        return false;
+#if TM_THREADED
+    if(Pool_status(pool, TM_DEFRAG_IP)){
+        // TODO: append the freed value onto the upool heap. If
+        //      there is overflow, mark an error
     }
+#endif
     if(*last < TM_UPOOL_ERROR){  // There is an array to use
         a = Pool_LIA(pool, *last);
         for(i=0; i<TM_FREED_BINSIZE; i++){
@@ -81,9 +82,14 @@ bool LIA_append(Pool *pool, tm_index_t *last, tm_index_t value){
     // data does not fit in this array, must allocate a new one
     uindex = LIA_new(pool);
     if(uindex >= TM_UPOOL_ERROR){
-        Pool_status_set(pool, TM_DEFRAG);
-        Pool_defrag_full(pool);  // TODO: simple implementation
-        return true;             // Also for simple only. It was freed because it was defraged
+        Pool_status_set(pool, TM_DEFRAG_FAST);
+#if TM_THREADED
+        return false;
+#else  // simple
+        Pool_defrag_full(pool);
+        return true;  // true because the freed value was taken care of
+                      // (everything was defragmented)
+#endif
     }
     a = Pool_LIA(pool, uindex);
     a->prev = *last;
@@ -152,8 +158,10 @@ found:
         *last = Pool_LIA(pool, final_last_i)->prev;
         tmdebug("new last=%u", *last);
         if(!LIA_del(pool, final_last_i)){
-            Pool_status_set(pool, TM_DEFRAG);
+            Pool_status_set(pool, TM_DEFRAG_FAST);
+#if !TM_THREADED    // simple
             Pool_defrag_full(pool);  // TODO: simple implementation
+#endif
             tmdebug("Failed deletion");
             return 0;
         }

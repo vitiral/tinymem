@@ -68,7 +68,8 @@ tm_index_t Pool_find_index(Pool *pool){
 
 
 tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
-    tm_index_t index = Pool_freed_getsize(pool, size);
+    tm_index_t index = 0;
+    if(!Pool_status(pool, TM_DEFRAG_IP)) index = Pool_freed_getsize(pool, size);
     if(index){
         if(!Pool_points_bool(pool, index)){
             tmdebug("ERROR pointer should point, but be unfilled");
@@ -89,14 +90,16 @@ tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
     }
     if(size > Pool_available(pool)) return 0;
     if(size > Pool_heap_left(pool)){
-        Pool_status_set(pool, TM_DEFRAG);
-        // TODO: this is the "simplest" implementation.
-        //      Threading is going to be main one long term
-        Pool_defrag_full(pool);
+        Pool_status_set(pool, TM_DEFRAG_FULL);
+#if TM_THREADED
+        return 0;
+#else   // simple
+        while(Pool_defrag_full(pool));
         if(size > Pool_heap_left(pool)){
             Pool_status_set(pool, TM_ERROR);
             return 0;
         }
+#endif
     }
     // find an unused index
     if(!Pool_pointers_left(pool)){
@@ -104,13 +107,17 @@ tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
     }
     index = Pool_find_index(pool);
     if(!index){
-        Pool_status_set(pool, TM_DEFRAG);
+        Pool_status_set(pool, TM_DEFRAG_FAST);
+#if TM_THREADED
+        return 0;
+#else   // simple
         Pool_defrag_full(pool);  // TODO: simple implemntation
         index = Pool_find_index(pool);
         if((!Pool_pointers_left(pool)) || (!index)){
             Pool_status_set(pool, TM_ERROR);
             return 0;
         }
+#endif
     }
     Pool_filled_set(pool, index);
     Pool_points_set(pool, index);
@@ -168,8 +175,10 @@ void Pool_free(Pool *pool, tm_index_t index){
     pool->used_pointers--;
     if(!Pool_freed_append(pool, index)){
         tmdebug("requesting defrag!");
-        Pool_status_set(pool, TM_DEFRAG);
-        Pool_defrag_full(pool);  // TODO: simple implementation
+        Pool_status_set(pool, TM_DEFRAG_FAST);
+#if !TM_THREADED    // simple
+        Pool_defrag_full(pool);
+#endif
     }
 }
 
