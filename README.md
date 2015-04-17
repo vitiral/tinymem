@@ -13,53 +13,53 @@ tinymem is pre-alpha, which means that the foundational operation is complete, b
 ```
 // Alocate the memory at some point in your code
 int len = 100;
-tm_ptr ptr = tm_alloc(sizeof(int) * len);// ptr that never changes
+tm_index_t index = tm_alloc(sizeof(int) * len);  // index never changes
 
 // ... later use the memory
-int *array = (int *) tm_void(ptr);
+int *array = (int *) tm_void(index);  // cast index as integer
 for(i=0; i<len; i++){
     array[i] = read_value(); // do some work
 }
 // ... do more stuff
 
 // ... When or if you want to free the data
-tm_free(ptr)  // free the memory again
+tm_free(index)  // free the memory again
 ```
 
 
 ## Development Goals and Timeline
-tinymem has the following development goals
+tinymem has the following features finished (crossed out items are in the development plan):
 - finish basic functionality
     - implement all features for tinymem.h (currently just implemented for Pool)
     - allocate
-        - ~~use previously freed values if same size~~
+        - use previously freed values if same size
         - indicate that defrag needs to happen if allocation fails
-    - ~~free~~
-        - ~~store freed values to be allocated later~~
-    - ~~defragment~~
-        - ~~full defragmentation~~: slow(ish) but reliable method that leaves no “holes”
+    - free
+        - store freed values to be allocated later
+    - defragment
+        - full defragmentation: slow(ish) but reliable method that leaves no “holes”
     - configurability
         - move `#define`s to a `tm_platform.h` file that the user can include to
             set various settings (like table size, etc)
     - full suite of unit tests
-        - ~~tests for basic functionality~~
+        - tests for basic functionality
         - tests for basic functionality of tinymem.h
     - basic threading support 
 
 - extensive unit test suite
     - robust unit tests for huge range of possibilities
-    - reliability testing over large amounts of time
-    - testing of additional features like threading and volatile (interrupted)
-        memory access
+    - ~~reliability testing over large amounts of time~~
+    - ~~testing of additional features like threading and volatile (interrupted)~~
+        ~~memory access~~
 
 - full threading support
-    - select max amount of time a defrag pass will run (defrag is a thread)
-    - speed or break things up as necessary to have every run < 100us
+    - ~~select max amount of time a defrag pass will run (defrag is a thread)~~
+    - ~~speed or break things up as necessary to have every run < 2us~~
 
 - Implement multiple tables
-    - tm_index returned by `tinymem.h` will have first 4 bits be the table.
-        this will be auto selected by `tm_void_p`
-    - full volatile (interrupt) support
+    - ~~tm_index returned by `tinymem.h` will have first 4 bits be the table.
+        this will be auto selected by `tm_void_p`~~
+    - ~~full volatile (interrupt) support~~
         - `0xFF` as first 4 bits in tm_index will corespond to special
             “volatile” table that has two (potential) indexes that are
             copied before defrag is done on one table
