@@ -20,7 +20,6 @@ void Pool_filled_sort(Pool *pool);
  *      Returns 0 when done, 1 when not done (in threaded mode)
  */
 int8_t Pool_defrag_full(Pool *pool){
-    // TODO: use pool->uheap/2 for the length
     tm_index_t index;
 
     if(!Pool_status(pool, TM_DEFRAG_FULL_IP))   goto NOT_STARTED;
@@ -86,7 +85,8 @@ THREAD_LOOP:
     // Deal with freed values during defrag
     if(Pool_status(pool, TM_ERROR)){
         tmdebug("There was an error!");
-        // TODO:
+        Pool_upool_clear(pool);  // freed values we have are invalid
+        Pool_reload_free(pool);
     } else {
         Pool_load_freed_after_defrag(pool);
     }
