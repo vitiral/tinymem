@@ -345,10 +345,10 @@ char *test_tm_free_basic(){
 
 #if TM_THREADED
 char *test_tm_threaded(){
-    uint8_t i, j;
+    uint8_t i, i2, j, n;
     tm_index_t index;
     tm_size_t size;
-    tm_index_t c;
+    uint16_t c, c2;
     tm_index_t data[201];
     tm_size_t used = 0;
     tm_size_t heap;
@@ -394,18 +394,52 @@ char *test_tm_threaded(){
     mu_assert(Pool_status(pool, TM_DEFRAG_FULL_IP), "defrag ip");
     // we now have some free data we can allocate from inside the defragger
     c = 0;
+    i2 = i;
     heap = pool->heap;
-    for(i=1; i<15; i+=2){
+    for(i=1; i<35; i+=2){
         size = Pool_space_free_in_defrag(pool);
         data[i] = Pool_alloc(pool, i * 2);
         mu_assert(data[i], "alloc during defrag");
         mu_assert(heap == pool->heap, "not allocated off heap");
-        tmdebug("free in defrag=%u, size=%u", Pool_space_free_in_defrag(pool), size - i*2);
-        mu_assert(Pool_space_free_in_defrag(pool) == size - i*2, "free space");
+        size = size - i*2;
+        mu_assert(Pool_space_free_in_defrag(pool) == size, "free space 1");
         for(j=0;j<i;j++){
             Pool_uint16_p(pool, data[i])[j] = c;
             c++;
         }
+        if((i>10) && i%3){  // throw in some random defrags
+            Pool_defrag_full_wtime(pool, 0);
+             size += i2 * 2;
+             mu_assert(Pool_space_free_in_defrag(pool) == size, "space free 2");
+            i2 += 2;
+        }
+    }
+
+    // Verify all that data
+    c = 0;
+    c2 = 0;
+    tmdebug("free in defrag=%u, size=%u", Pool_space_free_in_defrag(pool), size);
+    for(i=1; i<201; i++){
+        if(!(i%2)){     // even
+            mu_assert(Pool_sizeof(pool, i) == i*2, "defrag size");
+            for(j=0;j<i;j++){
+                mu_assert(Pool_uint16_p(pool, data[i])[j] == c, "defrag data inconcistency");
+                c++;
+            }
+        }
+        else{           // odd
+            c+=i;
+            if(i>=35) continue;
+            for(j=0;j<i;j++){
+                 mu_assert(Pool_uint16_p(pool, data[i])[j] == c2, "defrag data inconcistency 2");
+                c2++;
+            }
+        }
+    }
+
+    // Awesome, now let's free a whole bunch of stuff and verify it works
+    for(i=180; i<201; i+=2){
+
     }
 
     return NULL;
@@ -420,7 +454,7 @@ char *test_tm_threaded(){
     mu_assert(pool->used_pointers == 101, "defrag ptrs used 3");
     c = 0;
     for(i=1; i<201; i++){
-        if(! i%2){
+        if(!(i%2)){
             mu_assert(Pool_sizeof(pool, i) == i*2, "defrag size");
             for(j=0;j<i;j++){
                 mu_assert(Pool_uint16_p(pool, data[i])[j] == c, "defrag data inconcistency");

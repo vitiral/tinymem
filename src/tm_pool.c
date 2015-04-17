@@ -72,19 +72,22 @@ tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
     tm_index_t index = 0;
 #if !TM_THREADED    // simple
     index = Pool_freed_getsize(pool, size);
-#elif 1  // #else               // Threaded
+#else               // threaded
     if(!Pool_status(pool, TM_DEFRAG_IP)) index = Pool_freed_getsize(pool, size);
-#elif 0         //TODO: future threaded implementation
-    if(!Pool_status(pool, TM_DEFRAG_IP)) index = Pool_freed_getsize(pool, size);
-    else{
-        // There is a defrag in progress. This attempts to allocate from the "free" space
-        // Inside the defragmenter
-        index = Pool_upool_get_index(pool, TM_DEFRAG_temp);
-        if(size > Pool_space_free_in_defrag(pool)){
-            index = 0;
-        }
-        else{ // size fits in the middle of the deallocation mechanism
-            Pool_upool_set_index(pool, TM_DEFRAG_temp, index);
+    else{   // There is a defrag in progress.
+        // allocate from the "free" space inside the defragmenter
+        if(size > Pool_space_free_in_defrag(pool)) index = 0;
+        else{
+            index = Pool_find_index(pool);
+            if(index){
+                // mimick "found" freed index
+                Pool_points_set(pool, index);
+                pool->pointers[index] = (poolptr) {
+                    .size = size,
+                    .ptr = (Pool_location(pool, TM_DEFRAG_index) +
+                            Pool_sizeof(pool, TM_DEFRAG_index))};
+                TM_DEFRAG_index = index;
+            }
         }
     }
 #endif
