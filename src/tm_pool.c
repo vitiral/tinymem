@@ -80,8 +80,7 @@ tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
         // There is a defrag in progress. This attempts to allocate from the "free" space
         // Inside the defragmenter
         index = Pool_upool_get_index(pool, TM_DEFRAG_temp);
-        if(size > Pool_location(pool, TM_DEFRAG_index) + Pool_sizeof(pool, TM_DEFRAG_index) -
-                Pool_location(pool, index)){
+        if(size > Pool_space_free_in_defrag(pool)){
             index = 0;
         }
         else{ // size fits in the middle of the deallocation mechanism

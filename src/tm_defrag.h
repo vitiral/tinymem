@@ -22,9 +22,13 @@
 /**
  * \brief           perform a full (non-threaded) defragmentation of pool
  */
-int8_t            Pool_defrag_full(Pool *pool);
+inline int8_t   Pool_defrag_full(Pool *pool);
+int8_t          Pool_defrag_full_wtime(Pool *pool, uint16_t maxtime);
 
+void Pool_mark_freed_during_defrag(Pool *pool, tm_index_t index);
 void Pool_append_index_during_defrag(Pool *pool, tm_index_t index);
+inline tm_size_t Pool_space_free_in_defrag(Pool *pool);
+
 
 #endif
 /** @} */

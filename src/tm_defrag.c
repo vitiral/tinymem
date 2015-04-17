@@ -15,11 +15,17 @@ void Pool_filled_sort(Pool *pool);
 /*---------------------------------------------------------------------------*/
 /**     Defragmentation Functions                                            */
 
+int8_t Pool_defrag_full(Pool *pool){
+    return Pool_defrag_full_wtime(pool, TM_THREAD_TIME_100NS);
+}
+
+
 /**
  *  Notes:
  *      Returns 0 when done, 1 when not done (in threaded mode)
+ *      maxtime is in 100's of nanoseconds
  */
-int8_t Pool_defrag_full(Pool *pool){
+int8_t Pool_defrag_full_wtime(Pool *pool, uint16_t maxtime){
     tm_index_t index;
 
     if(!Pool_status(pool, TM_DEFRAG_FULL_IP))   goto NOT_STARTED;
@@ -41,7 +47,11 @@ NOT_STARTED:
     // freed bins now help store newly freed data
     // for(index=0; index<TM_FREED_BINS; index++) pool->freed[index] = 0;
 
-    TM_DEFRAG_temp = 0;  // indicate STARTED
+    TM_DEFRAG_temp = 0;     // indicate STARTED
+    TM_DEFRAG_index = 0;    // indicate no valid size
+#if TM_THREADED
+    return 1;   // TODO: use time
+#endif
 
 STARTED:
     // we now have sorted indexes by location. We just need to
@@ -50,6 +60,7 @@ STARTED:
     // TODO: use macro Pool_memmove(pool, to, from)
     index = Pool_upool_get_index(pool, 0);
     // memmove(to, from, size)
+    tmdebug("sizeof=%u, loc=%u", Pool_sizeof(pool, index), Pool_location(pool, index));
     memmove(Pool_location_void(pool, 1), Pool_void(pool, index), Pool_sizeof(pool, index));
     Pool_location_set(pool, index, 1);
     pool->used_bytes += Pool_sizeof(pool, index);
@@ -58,6 +69,9 @@ STARTED:
     TM_DEFRAG_index = index;
     // rest of memory is packed
     for(TM_DEFRAG_temp=1; TM_DEFRAG_temp<TM_DEFRAG_len; TM_DEFRAG_temp++){
+#if TM_THREADED
+    return 1;   // TODO: use time
+#endif
 THREAD_LOOP:
         index = Pool_upool_get_index(pool, TM_DEFRAG_temp);
         memmove(
@@ -199,8 +213,6 @@ void Pool_mark_freed_during_defrag(Pool *pool, tm_index_t index){
     *(tm_index_t *)Pool_uvoid(pool, pool->ustack) = index;
 }
 
-
-/**         Local                                                             */
 void Pool_append_index_during_defrag(Pool *pool, tm_index_t index){
     // Append an index so it will get defragmented as well
     if(Pool_ualloc(pool, sizeof(tm_index_t)) >= TM_UPOOL_ERROR){
@@ -212,6 +224,13 @@ void Pool_append_index_during_defrag(Pool *pool, tm_index_t index){
     Pool_upool_set_index(pool, TM_DEFRAG_len - 2, index);
 }
 
+inline tm_size_t Pool_space_free_in_defrag(Pool *pool){
+    if(!TM_DEFRAG_index) return 0;
+    return (Pool_location(pool, Pool_upool_get_index(pool, TM_DEFRAG_temp)) -
+     (Pool_location(pool, TM_DEFRAG_index) + Pool_sizeof(pool, TM_DEFRAG_index)));
+}
+
+/**         Local                                                             */
 void Pool_load_freed_after_defrag(Pool *pool){
     while(pool->ustack != TM_UPOOL_SIZE){
         if(!Pool_freed_append(pool, *(tm_index_t *)Pool_uvoid(

@@ -21,6 +21,10 @@
 #define TM_THREADED     0
 #endif
 
+#ifndef TM_THREAD_TIME_100NS
+#define TM_THREAD_TIME_100NS      20
+#endif
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           status bitcodes
