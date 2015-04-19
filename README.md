@@ -28,51 +28,58 @@ tm_free(index)  // free the memory again
 
 
 ## Development Goals and Timeline
-tinymem has the following features finished (crossed out items are in the development plan):
+tinymem has the following features finished 
+(crossed out items are not done but in the development plan prior to release):
 - finish basic functionality
-    - implement all features for tinymem.h (currently just implemented for Pool)
+    - implement all features for tinymem.h
     - allocate
         - use previously freed values if same size
-        - indicate that defrag needs to happen if allocation fails
+        - ~~switch to binned structure?~~
+            - pro: is faster (known execution time), allows for reuse of large memory
+                chunks
+            - con: will lead to more fragmentation and need another method
+                to “clean up.” This may be acceptable though
+        - automatically indicate that fragmentation needs to happen under numerous
+            “failure” conditions
     - free
         - store freed values to be allocated later
     - defragment
         - full defragmentation: slow(ish) but reliable method that leaves no “holes”
     - configurability
-        - move `#define`s to a `tm_platform.h` file that the user can include to
-            set various settings (like table size, etc)
+        - all features can be confitured in a `tinymem_platform.h` file. The default
+            one can be found in `platform/`
     - full suite of unit tests
         - tests for basic functionality
         - tests for basic functionality of tinymem.h
-    - basic threading support 
+        - test_t-test1.c test from the interwebs
+    - basic threading support
+        - asyncio like threading with event loop
+        - ~~automatic detection of when to defrag using `tm_thread()`~~
+        - ~~each defrag cycle takes < 2us (or user configurable time)~~
 
 - extensive unit test suite
     - robust unit tests for huge range of possibilities
+    - basic threading unit tests
     - ~~reliability testing over large amounts of time~~
-    - ~~testing of additional features like threading and volatile (interrupted)~~
-        ~~memory access~~
+    - ~~testing of additional features like volatile (interrupted) memory access~~
 
-- full threading support
-    - ~~select max amount of time a defrag pass will run (defrag is a thread)~~
-    - ~~speed or break things up as necessary to have every run < 2us~~
-
-- Implement multiple tables
+- ~~Implement multiple tables~~
     - ~~tm_index returned by `tinymem.h` will have first 4 bits be the table.
         this will be auto selected by `tm_void_p`~~
     - ~~full volatile (interrupt) support~~
         - `0xFF` as first 4 bits in tm_index will corespond to special
             “volatile” table that has two (potential) indexes that are
             copied before defrag is done on one table
-        
 
 ## Operation and Development
+
+#### Developers
+
+Developer documentation can be found at DEVELOPER.md in this folder. Please reference
+this for details on the internal workings of tinymem.
 
 #### Issues
 If you find any bugs or feature requests, submit them to: 
 
 https://github.com/cloudformdesign/tinymem/issues
-
-#### Developers
-
-Developer documentation can be found at DEVELOPER.md in this folder
 
