@@ -3,6 +3,7 @@
 #include "dbg.h"
 #include "tm_pool.h"
 #include "tm_freed.h"
+#include "tm_defrag.h"
 
 /*---------------------------------------------------------------------------*/
 /* Pool Methods                                                              */
@@ -173,7 +174,7 @@ tm_index_t Pool_realloc(Pool *pool, tm_index_t index, tm_size_t size){
             Pool_status_set(pool, TM_DEFRAG_FAST);
             return 0;
 #else       // simple
-            Pool_full_defrag(pool);
+            Pool_defrag_full(pool);
             new_index = Pool_find_index(pool);
 #endif
         }
