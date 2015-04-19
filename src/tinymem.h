@@ -87,6 +87,13 @@ inline uint8_t tm_status(tm_index_t poolid, uint8_t name);
 
 /*---------------------------------------------------------------------------*/
 /**
+ * \brief           tinymem thread to automatically handle defragmenting memory
+ * \return          status of thread
+ */
+uint8_t tm_thread();
+
+/*---------------------------------------------------------------------------*/
+/**
  * \brief           obtain void pointer from tm_index_t
  * \param index     valid tm_index_t
  * \return          (void *) with the original data

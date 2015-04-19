@@ -34,6 +34,12 @@ inline uint8_t tm_status(tm_index_t poolid, uint8_t name){
     return Pool_status(&pool, name);
 }
 
+uint8_t tm_thread(){
+    if(Pool_status(&pool, TM_ANY_DEFRAG)){
+        return Pool_defrag_full(&pool);
+    }
+}
+
 inline void*  tm_void(tm_index_t index){
     return Pool_void(&pool, index);
 }

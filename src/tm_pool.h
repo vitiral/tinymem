@@ -16,16 +16,6 @@
 
 /*---------------------------------------------------------------------------*/
 /**
- * \brief           Pool Configuration options
- *                  define your own "tinymem_platform.h" and include it in your
- *                  Makefile to select these options
- *                  Or, link to one of the standard ones in the `platform`
- *                  folder
- */
-#include "tinymem_platform.h"
-
-/*---------------------------------------------------------------------------*/
-/**
  * \brief           Internal Definitions based on platform
  */
 #define TM_UPOOL_SIZE           (TM_MAX_POOL_PTRS * sizeof(tm_index_t))
@@ -37,19 +27,6 @@
 
 #define INTBITS                 (sizeof(int) * 8)
 #define MAXUINT                 ((unsigned int) 0xFFFFFFFFFFFFFFFF)
-
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           Pool status bitcodes
- */
-#define TM_DEFRAG_FULL  (1<<0)  // a full defrag has been requested
-#define TM_DEFRAG       (1<<1)  // a fast defrag has been requested
-#define TM_DEFRAG_IP    (1<<2)  // A defrag is in progress
-#define TM_MOVING       (1<<3)  // the memory manager is currently moving a block
-#define TM_ERROR        (1<<7)  // a memory manager internal error occurred
-#define TM_ANY_DEFRAG   (TM_DEFRAG_FULL | TM_DEFRAG | TM_DEFRAG_IP)   // some defrag has been requested
-
-
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -76,6 +53,7 @@ typedef struct {
     tm_index_t points_index;              //!< faster lookup for unused pointers for allocation
     tm_size_t uheap;                      //!< heap of the upool
     tm_size_t ustack;                     //!< stack of the upool
+    tm_index_t temp;                      //!< used in internal methods
     uint8_t filled[TM_MAX_FILLED_PTRS]; //!< bit array of filled pointers (only used, not freed)
     uint8_t points[TM_MAX_FILLED_PTRS]; //!< bit array of used pointers (both used and freed)
     poolptr pointers[TM_MAX_POOL_PTRS]; //!< size and location of data in pool
