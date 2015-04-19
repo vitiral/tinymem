@@ -351,6 +351,7 @@ char *test_tm_threaded(){
     uint16_t c, c2;
     tm_index_t data[201];
     tm_size_t used = 0;
+    tm_size_t stack;
     tm_size_t heap;
     const tm_size_t calculated_use = 40200;
 
@@ -420,58 +421,57 @@ char *test_tm_threaded(){
     c2 = 0;
     tmdebug("free in defrag=%u, size=%u", Pool_space_free_in_defrag(pool), size);
     for(i=1; i<201; i++){
+        mu_assert(Pool_sizeof(pool, i) == i*2, "defrag size");
         if(!(i%2)){     // even
-            mu_assert(Pool_sizeof(pool, i) == i*2, "defrag size");
-            for(j=0;j<i;j++){
-                mu_assert(Pool_uint16_p(pool, data[i])[j] == c, "defrag data inconcistency");
-                c++;
-            }
+            for(j=0;j<i;j++, c++) mu_assert(Pool_uint16_p(pool, data[i])[j] == c, "defrag data inconcistency");
         }
         else{           // odd
             c+=i;
             if(i>=35) continue;
-            for(j=0;j<i;j++){
-                 mu_assert(Pool_uint16_p(pool, data[i])[j] == c2, "defrag data inconcistency 2");
-                c2++;
-            }
+            for(j=0;j<i;j++, c2++) mu_assert(Pool_uint16_p(pool, data[i])[j] == c2, "defrag data inconcistency 2");
         }
     }
 
+    stack = pool->ustack;
     // Awesome, now let's free a whole bunch of stuff and verify it works
-    for(i=180; i<201; i+=2){
-
+    for(i=150; i<180; i+=2){
+        Pool_free(pool, data[i]);
+        mu_assert(!Pool_filled_bool(pool, data[i]), "is freed");
+        stack -= sizeof(tm_index_t);
+        mu_assert(pool->ustack == stack, "free appended");
     }
 
-    return NULL;
-
-    mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - 1 - calculated_use, "fdefrag heap left 2");
-    mu_assert(Pool_available(pool) == TM_POOL_SIZE - 1 - 20200, "fdefrag available 2");
-
+    // Complete the defrag
     while(Pool_defrag_full(pool));
 
-    mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - 20200 - 1, "fdefrag heap left 3");
-    mu_assert(Pool_available(pool) == TM_POOL_SIZE - 20200 - 1, "defrag available 3");
-    mu_assert(pool->used_pointers == 101, "defrag ptrs used 3");
-    c = 0;
+    // re-allocate, verifying that it doesn't come off the heap
+    heap = pool->heap;
+    for(i=150; i<180; i+=2){
+        mu_assert(Pool_points_bool(pool, data[i]), "does point");
+        mu_assert(!Pool_filled_bool(pool, data[i]), "is still freed");
+        data[i] = Pool_alloc(pool, i * 2);
+        mu_assert(data[i], "alloc");
+        mu_assert(heap == pool->heap, "heap not changed");
+        for(j=0;j<i;j++) Pool_uint16_p(pool, data[i])[j] = 0xF5F5;
+    }
+
+    c=0, c2=0;
     for(i=1; i<201; i++){
-        if(!(i%2)){
-            mu_assert(Pool_sizeof(pool, i) == i*2, "defrag size");
-            for(j=0;j<i;j++){
-                mu_assert(Pool_uint16_p(pool, data[i])[j] == c, "defrag data inconcistency");
-                c++;
+        mu_assert(Pool_sizeof(pool, i) == i*2, "defrag size");
+        if(!(i%2)){     // even
+            if((i>=150) && (i<180)){
+                mu_assert(Pool_uint16_p(pool, data[i])[j] == 0xF5F5, "new alloc");
+                c+=i;
+                continue;
             }
+            for(j=0;j<i;j++, c++) mu_assert(Pool_uint16_p(pool, data[i])[j] == c, "defrag data inconcistency 3");
         }
-        else c+=i;  // odds were deleted
+        else{           // odd
+            c+=i;
+            if(i>=35) continue;
+            for(j=0;j<i;j++, c2++) mu_assert(Pool_uint16_p(pool, data[i])[j] == c2, "defrag data inconcistency 3");
+        }
     }
-    // reallocate
-    for(i=1; i<100; i+=2){
-        j = Pool_alloc(pool, i*2);
-        mu_assert(j == i, "defrag reget indexes");
-    }
-    Pool_del(pool);
-    return NULL;
-
-
 
     return NULL;
 }

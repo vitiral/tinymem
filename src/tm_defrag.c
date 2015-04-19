@@ -39,9 +39,6 @@ NOT_STARTED:
 
     Pool_filled_sort(pool);
 
-    pool->used_bytes = 1;
-    pool->used_pointers = 1;
-
     if(!TM_DEFRAG_len) return 0;  // there were no filled indexes, done
 
     // freed bins now help store newly freed data
@@ -60,11 +57,8 @@ STARTED:
     // TODO: use macro Pool_memmove(pool, to, from)
     index = Pool_upool_get_index(pool, 0);
     // memmove(to, from, size)
-    tmdebug("sizeof=%u, loc=%u", Pool_sizeof(pool, index), Pool_location(pool, index));
     memmove(Pool_location_void(pool, 1), Pool_void(pool, index), Pool_sizeof(pool, index));
     Pool_location_set(pool, index, 1);
-    pool->used_bytes += Pool_sizeof(pool, index);
-    pool->used_pointers++;
 
     TM_DEFRAG_index = index;
     // rest of memory is packed
@@ -82,8 +76,6 @@ THREAD_LOOP:
         Pool_location_set(pool, index,
                           Pool_location(pool, TM_DEFRAG_index) +
                           Pool_sizeof(pool, TM_DEFRAG_index));
-        pool->used_bytes += Pool_sizeof(pool, index);
-        pool->used_pointers++;
         TM_DEFRAG_index = index;
     }
 
@@ -232,15 +224,17 @@ inline tm_size_t Pool_space_free_in_defrag(Pool *pool){
 
 /**         Local                                                             */
 void Pool_load_freed_after_defrag(Pool *pool){
-    while(pool->ustack != TM_UPOOL_SIZE){
+    // move ustack to local as Pool_freed_append uses it
+    tm_index_t ustack = pool->ustack;
+    pool->ustack = TM_UPOOL_SIZE;
+    while(ustack != TM_UPOOL_SIZE){
         if(!Pool_freed_append(pool, *(tm_index_t *)Pool_uvoid(
-                pool, pool->ustack))){
+                pool, ustack))){
             // unlikely
-            tmdebug("load_freed_after_defrag failed");
             Pool_status_set(pool, TM_DEFRAG_FULL);
             return;
         }
-        pool->ustack += sizeof(tm_index_t);
+        ustack += sizeof(tm_index_t);
     }
 }
 
