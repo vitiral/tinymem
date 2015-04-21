@@ -8,7 +8,7 @@ void Pool_append_index_during_defrag(Pool *pool, tm_index_t index);
 void Pool_load_freed_after_defrag(Pool *pool);
 #endif
 
-int8_t heap_sort(Pool *pool, tm_index_t *a, int16_t count);
+int8_t heap_sort(Pool *pool, tm_index_t *a, int16_t count, int32_t *clocks_left);
 int8_t Pool_filled_sort(Pool *pool, int32_t *clocks_left);
 
 #define TM_DEFRAG_CAN_ALLOC    100
@@ -142,24 +142,37 @@ void siftDown(Pool *pool, tm_index_t *a, int16_t start, int16_t count);
 #define SWAP(r,s)  do{tm_index_t t=r; r=s; s=t;} while(0)
 
 
-int8_t heap_sort(Pool *pool, tm_index_t *a, int16_t count){
+int8_t heap_sort(Pool *pool, tm_index_t *a, int16_t count, int32_t *clocks_left){
+#if TM_THREADED
+    int32_t start = clock();
+#endif
+
     switch(TM_DEFRAG_loc){
 case 15:
     /* heapify */
-    TM_DEFRAG_loc = 16;
-    for (TM_DEFRAG_temp = (int16_t)(count-2)/2; TM_DEFRAG_itemp >= 0;
+    for (TM_DEFRAG_temp = (int16_t)(count-2)/2, TM_DEFRAG_loc = 16;
+            TM_DEFRAG_itemp >= 0;
             TM_DEFRAG_temp = TM_DEFRAG_itemp - 1) {
+#if TM_THREADED
+        if(*clocks_left < (clock() - start) * CPU_CLOCKS_PER_CLOCK) return 1;
+#endif
 case 16:
         siftDown(pool, a, TM_DEFRAG_itemp, count);
     }
-    TM_DEFRAG_loc = 17;
 
-    for (TM_DEFRAG_temp=(int16_t)(count-1); TM_DEFRAG_itemp > 0;
+    for (TM_DEFRAG_temp=(int16_t)(count-1), TM_DEFRAG_loc = 17;
+            TM_DEFRAG_itemp > 0;
             TM_DEFRAG_temp = TM_DEFRAG_itemp - 1) {
+#if TM_THREADED
+        if(*clocks_left < (clock() - start) * CPU_CLOCKS_PER_CLOCK) return 1;
+#endif
 case 17:
         SWAP(a[TM_DEFRAG_itemp], a[0]);
         siftDown(pool, a, 0, TM_DEFRAG_itemp);
     }
+#if TM_THREADED
+    *clocks_left -= (clock() - start) * CPU_CLOCKS_PER_CLOCK;
+#endif
     return 0;
 default:
     assert(0);
@@ -249,7 +262,7 @@ case 11:
     TM_DEFRAG_loc = 15;
 default:
     // kind of a pun, sorting the heap... haha
-    return heap_sort(pool, (tm_index_t *)pool->upool, TM_DEFRAG_len);
+    return heap_sort(pool, (tm_index_t *)pool->upool, TM_DEFRAG_len, clocks_left);
     }
 }
 
