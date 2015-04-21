@@ -1,6 +1,7 @@
 #include "minunit.h"
 #include "tm_pool.h"
 #include "tm_freed.h"
+#include "time.h"
 
 #define TABLE_STANDIN NULL
 
@@ -475,6 +476,37 @@ char *test_tm_threaded(){
 
     return NULL;
 }
+
+char *test_tm_threaded_time(){
+    uint8_t i;
+    tm_index_t data[201];
+    clock_t start;
+    Pool *pool = Pool_new();
+    mu_assert(pool, "fdefrag new");
+
+    // allocate a bunch of data, free every other
+    for(i=1; i<201; i++){
+        data[i] = Pool_alloc(pool, i * 2);
+        mu_assert(data[i], "alloc");
+    }
+    for(i=1; i<201; i++){
+        if(i%2) Pool_free(pool, data[i]);
+    }
+
+    // during allocation make sure that nothing takes more than US + 1
+    i = true;
+    while(i){
+        start = clock();
+        i = Pool_defrag_full(pool);
+        start = (clock() - start) * 1000000 / (CLOCKS_PER_SEC);
+        tmdebug("time=%u", start);
+        /*mu_assert(start < TM_THREAD_TIME_US + 1, "thread time");*/
+    }
+
+    tmdebug("clocks/us=%u", CPU_CLOCKS_PER_US);
+
+    return NULL;
+}
 #endif
 
 
@@ -491,6 +523,7 @@ char *all_tests(){
 
 #if TM_THREADED
     mu_run_test(test_tm_threaded);
+    mu_run_test(test_tm_threaded_time);
 #endif
     return NULL;
 }

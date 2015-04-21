@@ -3,6 +3,7 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <assert.h>
 
 #define tmdebug(...)      do{printf("[DEBUG](%s,%u):", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n");}while(0)
 #define tm_assert(exp, msg)     do{if(!(exp)){tmdebug(msg);}}while(0)
@@ -17,13 +18,22 @@
  */
 #include "tinymem_platform.h"
 
+
+#ifndef TM_WORD_SIZE
+#define TM_WORD_SIZE    sizeof(int)
+#endif
+
 #ifndef TM_THREADED
 #define TM_THREADED     0
 #endif
 
-#ifndef TM_THREAD_TIME_100NS
-#define TM_THREAD_TIME_100NS      20
+#ifndef TM_THREAD_TIME_US
+#define TM_THREAD_TIME_US      2
 #endif
+
+// Used for timing. The clocks/clock is used with time.h clock() function
+#define CPU_CLOCKS_PER_US       ((CPU_CLOCKS_PER_SEC) / 1000000)
+#define CPU_CLOCKS_PER_CLOCK    (CPU_CLOCKS_PER_SEC / CLOCKS_PER_SEC)
 
 /*---------------------------------------------------------------------------*/
 /**

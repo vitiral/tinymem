@@ -1,7 +1,24 @@
 #ifndef __tinymem_platform_h
 #define __tinymem_platform_h
 
-#include "tm_types.h"
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           Time module
+ *                  This file must include the standard c time module,
+ *                  or it must define the following standard C symbols:
+ *                      clock()         -- returns total clock cycles
+ *                      CLOCKS_PER_SEC  -- macro for number of clocks/second
+ *                          returned by clock()
+ */
+#include "time.h"
+
+#define CPU_CLOCKS_PER_SEC      (700000000uL)     // Defined at 700MHz for general
+
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           Max time allowed per run of the thread (in microseconds)
+*/
+#define TM_THREAD_TIME_US      2
 
 /*---------------------------------------------------------------------------*/
 /**

@@ -17,6 +17,7 @@
 #define TM_DEFRAG_len               ((pool)->uheap / 2)
 #define TM_DEFRAG_index             ((pool)->pointers[0].ptr)
 #define TM_DEFRAG_temp              ((pool)->pointers[0].size)
+#define TM_DEFRAG_loc               ((pool)->freed[0])
 
 /*---------------------------------------------------------------------------*/
 /**

@@ -11,12 +11,14 @@ void Pool_load_freed_after_defrag(Pool *pool);
 void heap_sort(Pool *pool, tm_index_t *a, int16_t count);
 void Pool_filled_sort(Pool *pool);
 
+#define TM_DEFRAG_CAN_DEFRAG    100
+
 
 /*---------------------------------------------------------------------------*/
 /**     Defragmentation Functions                                            */
 
 int8_t Pool_defrag_full(Pool *pool){
-    return Pool_defrag_full_wtime(pool, TM_THREAD_TIME_100NS);
+    return Pool_defrag_full_wtime(pool, TM_THREAD_TIME_US);
 }
 
 
@@ -27,6 +29,9 @@ int8_t Pool_defrag_full(Pool *pool){
  */
 int8_t Pool_defrag_full_wtime(Pool *pool, uint16_t maxtime){
     tm_index_t index;
+#if TM_THREADED
+    int32_t clocks_left = CPU_CLOCKS_PER_US * maxtime;
+#endif
 
     if(!Pool_status(pool, TM_DEFRAG_FULL_IP))   goto NOT_STARTED;
     else if(TM_DEFRAG_temp == 0)                    goto STARTED;
