@@ -19,6 +19,8 @@
 #define TM_DEFRAG_temp              ((pool)->pointers[0].size)
 #define TM_DEFRAG_itemp             ((int16_t)((pool)->pointers[0].size))
 #define TM_DEFRAG_loc               ((pool)->freed[0])
+#define TM_DEFRAG_CAN_ALLOC              20
+#define TM_DEFRAG_CAN_ALLOC_FREESPACE    100
 
 /*---------------------------------------------------------------------------*/
 /**

@@ -11,8 +11,8 @@ void Pool_load_freed_after_defrag(Pool *pool);
 int8_t heap_sort(Pool *pool, tm_index_t *a, int16_t count, int32_t *clocks_left);
 int8_t Pool_filled_sort(Pool *pool, int32_t *clocks_left);
 
-#define TM_DEFRAG_CAN_ALLOC    100
 
+#define TM_DEFRAG_internal      ((pool)->freed[1])
 
 /*---------------------------------------------------------------------------*/
 /**     Defragmentation Functions                                            */
@@ -44,7 +44,7 @@ int8_t Pool_defrag_full_wtime(Pool *pool, uint16_t maxtime){
     case 40:
         index = Pool_upool_get_index(pool, 0);
         goto MOVE_FIRST;
-    case TM_DEFRAG_CAN_ALLOC:
+    case TM_DEFRAG_CAN_ALLOC_FREESPACE:
         index = Pool_upool_get_index(pool, TM_DEFRAG_temp);
         goto MOVE_LOOP;
     default:
@@ -87,7 +87,7 @@ MOVE_FIRST:
     Pool_location_set(pool, index, 1);
 
     TM_DEFRAG_index = index;
-    TM_DEFRAG_loc = TM_DEFRAG_CAN_ALLOC;
+    TM_DEFRAG_loc = TM_DEFRAG_CAN_ALLOC_FREESPACE;
     // rest of memory is packed
     for(TM_DEFRAG_temp=1; TM_DEFRAG_temp<TM_DEFRAG_len; TM_DEFRAG_temp++){
         index = Pool_upool_get_index(pool, TM_DEFRAG_temp);
@@ -148,25 +148,25 @@ int8_t heap_sort(Pool *pool, tm_index_t *a, int16_t count, int32_t *clocks_left)
 #endif
 
     switch(TM_DEFRAG_loc){
-case 15:
+case TM_DEFRAG_CAN_ALLOC:
     /* heapify */
-    for (TM_DEFRAG_temp = (int16_t)(count-2)/2, TM_DEFRAG_loc = 16;
+    for (TM_DEFRAG_temp = (int16_t)(count-2)/2, TM_DEFRAG_loc = TM_DEFRAG_CAN_ALLOC + 1;
             TM_DEFRAG_itemp >= 0;
             TM_DEFRAG_temp = TM_DEFRAG_itemp - 1) {
 #if TM_THREADED
         if(*clocks_left < (clock() - start) * CPU_CLOCKS_PER_CLOCK) return 1;
 #endif
-case 16:
+case TM_DEFRAG_CAN_ALLOC + 1:
         siftDown(pool, a, TM_DEFRAG_itemp, count);
     }
 
-    for (TM_DEFRAG_temp=(int16_t)(count-1), TM_DEFRAG_loc = 17;
+    for (TM_DEFRAG_temp=(int16_t)(count-1), TM_DEFRAG_loc = TM_DEFRAG_CAN_ALLOC + 2;
             TM_DEFRAG_itemp > 0;
             TM_DEFRAG_temp = TM_DEFRAG_itemp - 1) {
 #if TM_THREADED
         if(*clocks_left < (clock() - start) * CPU_CLOCKS_PER_CLOCK) return 1;
 #endif
-case 17:
+case TM_DEFRAG_CAN_ALLOC + 2:
         SWAP(a[TM_DEFRAG_itemp], a[0]);
         siftDown(pool, a, 0, TM_DEFRAG_itemp);
     }
@@ -258,11 +258,11 @@ case 11:
         pool->heap = 1;
         return 0;
     }
-
-    TM_DEFRAG_loc = 15;
+    // Use index instead of length, as the uheap can change during sorting
+    TM_DEFRAG_index = TM_DEFRAG_len;
+    TM_DEFRAG_loc = TM_DEFRAG_CAN_ALLOC;
 default:
-    // kind of a pun, sorting the heap... haha
-    return heap_sort(pool, (tm_index_t *)pool->upool, TM_DEFRAG_len, clocks_left);
+    return heap_sort(pool, (tm_index_t *)pool->upool, TM_DEFRAG_index, clocks_left);
     }
 }
 
@@ -293,7 +293,7 @@ void Pool_append_index_during_defrag(Pool *pool, tm_index_t index){
 }
 
 inline tm_size_t Pool_space_free_in_defrag(Pool *pool){
-    if(TM_DEFRAG_loc < TM_DEFRAG_CAN_ALLOC) return 0;
+    if(TM_DEFRAG_loc < TM_DEFRAG_CAN_ALLOC_FREESPACE) return 0;
     return (Pool_location(pool, Pool_upool_get_index(pool, TM_DEFRAG_temp)) -
      (Pool_location(pool, TM_DEFRAG_index) + Pool_sizeof(pool, TM_DEFRAG_index)));
 }

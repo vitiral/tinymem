@@ -80,6 +80,8 @@ tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
 #else               // threaded
     if(!Pool_status(pool, TM_DEFRAG_IP)) index = Pool_freed_getsize(pool, size);
     else{   // There is a defrag in progress.
+        if(TM_DEFRAG_loc < TM_DEFRAG_CAN_ALLOC) return 0;
+
         // allocate from the "free" space inside the defragmenter
         if(size > Pool_space_free_in_defrag(pool)) index = 0;
         else{
