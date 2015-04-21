@@ -1,7 +1,41 @@
 #include "stdlib.h"
 #include "tm_defrag.h"
 
+/*---------------------------------------------------------------------------*/
+/**
+ * A Note to Developers
+ *
+ * This module is designed to be "threaded" -- which just means that
+ * Pool_defrag_full (and other defrag methods) do not block for very long --
+ * the reference implementation is 5us or less
+ *
+ * However, many operations inside the defrag methods require much more than 5us.
+ * Even searching through * the index array for filled indexes will take more
+ * than 5us in most cases
+ *
+ * Therefore, these functions were designed to be completely re-entrant. But
+ * this had to be done without the use of traditional threading
+ * (microcontrollers don't have that ability!)
+ *
+ * This threading programming style may not be familiar to you. If not I would
+ * highly recommend reading the documentation and source code for protothreads,
+ * to get you started check out this link:
+ *      http://dunkels.com/adam/pt/about.html
+ *
+ * To put it simply, all functions are defined so that they can return, and
+ * upon being called again they arrive in the place they were before, with
+ * the local variables set to whatever they should be set to.
+ *
+ * In addition, the rest of the system uses the current progress of the defrag
+ * method to mark it's own progress. The progress of defrag can be retrieved
+ * with the "TM_DEFRAG_loc" macro. These two macros are used to record
+ * the progress and what the system is allowed to do
+ *      TM_DEFRAG_CAN_ALLOC             : before this, no allocation can happen
+ *      TM_DEFRAG_CAN_ALLOC_FREESPACE   : after this, allocation can happen from
+ *                                        inside the defragmentation space
+ */
 
+/*---------------------------------------------------------------------------*/
 /**     Local Functions                                                      */
 #if TM_THREADED
 void Pool_append_index_during_defrag(Pool *pool, tm_index_t index);
@@ -25,7 +59,16 @@ int8_t Pool_defrag_full(Pool *pool){
 /**
  *  Notes:
  *      Returns 0 when done, 1 when not done (in threaded mode)
- *      maxtime is in 100's of nanoseconds
+ *      maxtime is in microseconds
+ */
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           run a full defragmentation run
+ * \param pool      pointer to Pool struct
+ * \param maxtime   maximum time to run per call
+ * \return          0: when done
+ *                  1: when need to call again
+ *                  *: error
  */
 int8_t Pool_defrag_full_wtime(Pool *pool, uint16_t maxtime){
     tm_index_t index;
@@ -33,6 +76,9 @@ int8_t Pool_defrag_full_wtime(Pool *pool, uint16_t maxtime){
     int32_t clocks_left = CPU_CLOCKS_PER_US * maxtime;
 #endif
 
+    // Select the "location" to goto in the function. Remember that this
+    // function returns before it is complete, storing it's location in
+    // TM_DEFRAG_loc
     if(!Pool_status(pool, TM_DEFRAG_FULL_IP)){
         goto NOT_STARTED;
     }
@@ -42,9 +88,13 @@ int8_t Pool_defrag_full_wtime(Pool *pool, uint16_t maxtime){
     }
     switch(index){
     case 40:
+        // The index has to be loaded because it is a local variable,
+        // so it was lost from the previous call
         index = Pool_upool_get_index(pool, 0);
         goto MOVE_FIRST;
     case TM_DEFRAG_CAN_ALLOC_FREESPACE:
+        // Again, the index has to be reloaded because it is a local
+        // variable and was lost
         index = Pool_upool_get_index(pool, TM_DEFRAG_temp);
         goto MOVE_LOOP;
     default:
@@ -53,6 +103,7 @@ int8_t Pool_defrag_full_wtime(Pool *pool, uint16_t maxtime){
     }
 
 NOT_STARTED:
+    // Start the thread, mark the location, get things rolling!
     Pool_status_clear(pool, TM_ERROR);
     Pool_status_set(pool, TM_DEFRAG_FULL_IP);
     Pool_status_clear(pool, TM_DEFRAG_FAST | TM_DEFRAG_FULL);
@@ -63,6 +114,8 @@ NOT_STARTED:
     TM_DEFRAG_loc = 10;
 
 SORTING:
+    // The Pool_filled_sort function handles it's own re-entrancy
+    // Like this function, it returns 0 when it is complete
     if(Pool_filled_sort(pool, &clocks_left)){
         return 1;
     }
@@ -86,9 +139,9 @@ MOVE_FIRST:
     memmove(Pool_location_void(pool, 1), Pool_void(pool, index), Pool_sizeof(pool, index));
     Pool_location_set(pool, index, 1);
 
+    // Set everything up for the loop and run it
     TM_DEFRAG_index = index;
     TM_DEFRAG_loc = TM_DEFRAG_CAN_ALLOC_FREESPACE;
-    // rest of memory is packed
     for(TM_DEFRAG_temp=1; TM_DEFRAG_temp<TM_DEFRAG_len; TM_DEFRAG_temp++){
         index = Pool_upool_get_index(pool, TM_DEFRAG_temp);
 #if TM_THREADED
@@ -110,15 +163,18 @@ MOVE_LOOP:
 
     // heap can now move left
     pool->heap = Pool_location(pool, index) + Pool_sizeof(pool, index);
-    // reset p_* variables
+
+    // reset p_* variables (they were used as temporary variables)
     pool->pointers[0].ptr  = 0;
     pool->pointers[0].size = 1;
     Pool_status_clear(pool, TM_DEFRAG_FULL_IP);
     pool->uheap = 0;  // deallocate sorted filled indexes
-    Pool_freed_array_reset(pool);
+    Pool_freed_array_reset(pool);  // The array was used for temporary variables
+
+    // TODO: do one more return before this?
 
 #if TM_THREADED
-    // Deal with freed values during defrag
+    // Deal with values that were freed during defrag
     if(Pool_status(pool, TM_ERROR)){
         tmdebug("There was an error!");
         Pool_upool_clear(pool);  // freed values we have are invalid
@@ -142,10 +198,18 @@ void siftDown(Pool *pool, tm_index_t *a, int16_t start, int16_t count);
 #define SWAP(r,s)  do{tm_index_t t=r; r=s; s=t;} while(0)
 
 
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           Standard heap sort made to be re-entrant
+ *                  http://rosettacode.org/wiki/Sorting_algorithms/Heapsort#C
+ */
 int8_t heap_sort(Pool *pool, tm_index_t *a, int16_t count, int32_t *clocks_left){
 #if TM_THREADED
     int32_t start = clock();
 #endif
+
+    // TODO: this uses clock() because I do not know a way to predict how
+    //      long a heap sort operation will take. Is this possible?
 
     switch(TM_DEFRAG_loc){
 case TM_DEFRAG_CAN_ALLOC:
@@ -199,26 +263,12 @@ void siftDown(Pool *pool, tm_index_t *a, int16_t start, int16_t end){
 }
 
 
-void bubble_sort(Pool *pool, tm_index_t *array, tm_index_t len){
-    // sort indexes by location
-    tm_index_t i, j;
-    tm_index_t swap;
-    bool workdone = false;
-    for (i = 0; i < len; i++){
-        workdone = false;
-        for (j = 0; j < len - 1; j++){
-            if (Pool_location(pool, array[j]) < Pool_location(pool, array[j-1])){
-                swap       = array[j];
-                array[j]   = array[j-1];
-                array[j-1] = swap;
-                workdone = true;
-            }
-        }
-        if(! workdone) break; // no values were moved, list is sorted
-    }
-}
-
-
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           Sort all filled indexes in the pool (re-entrant)
+ *                  - move indexes from filled->upool   (allocation disabled )
+ *                  - sort indexes                      (heap only allocation)
+ */
 int8_t Pool_filled_sort(Pool *pool, int32_t *clocks_left){
 #if TM_THREADED
     int32_t start;
@@ -260,7 +310,7 @@ case 11:
     }
     // Use index instead of length, as the uheap can change during sorting
     TM_DEFRAG_index = TM_DEFRAG_len;
-    TM_DEFRAG_loc = TM_DEFRAG_CAN_ALLOC;
+    TM_DEFRAG_loc = TM_DEFRAG_CAN_ALLOC;        // Allow allocation (on heap)
 default:
     return heap_sort(pool, (tm_index_t *)pool->upool, TM_DEFRAG_index, clocks_left);
     }
@@ -270,8 +320,26 @@ default:
 #if TM_THREADED
 /*---------------------------------------------------------------------------*/
 /**     Threading Helper Functions                                           */
+/**       -  Global                                                          */
 
-/**         Global                                                           */
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           Mark a freed value as freed while a defrag is happening
+ *
+ *                  This function is used by other files to indicate
+ *                  that a value has been freed while a defrag is in progress.
+ *
+ *                  Because a defrag clears the upool and freed arrays,
+ *                  the normal methods for indicating that values have been
+ *                  freed must be disabled.
+ *
+ *                  This function can fail. When it fails, it sets TM_ERROR
+ *                  If this happens, Pool_reload_freed is called at the end
+ *                  of defrag
+ *
+ *                  Other functions actually set the bits and decrement
+ *                  counters, etc
+ */
 void Pool_mark_freed_during_defrag(Pool *pool, tm_index_t index){
     if(Pool_uheap_left(pool) < 2){
         Pool_status_set(pool, TM_ERROR);
@@ -281,6 +349,15 @@ void Pool_mark_freed_during_defrag(Pool *pool, tm_index_t index){
     *(tm_index_t *)Pool_uvoid(pool, pool->ustack) = index;
 }
 
+/**
+ * \brief           This appends the index onto the current defrag route.
+ *
+ *                  The index MUST have been allocated off of the heap,
+ *                  therefore it is already sorted.
+ *
+ *                  The defragmentation routine will then defragment the
+ *                  index with the rest of the data
+ */
 void Pool_append_index_during_defrag(Pool *pool, tm_index_t index){
     // Append an index so it will get defragmented as well
     if(Pool_ualloc(pool, sizeof(tm_index_t)) >= TM_UPOOL_ERROR){
@@ -292,6 +369,21 @@ void Pool_append_index_during_defrag(Pool *pool, tm_index_t index){
     Pool_upool_set_index(pool, TM_DEFRAG_len - 2, index);
 }
 
+/**
+ * \brief           Get the amount of data free inside the defrag process
+ *
+ *                  When a defrag is in progress the data looks like this:
+ *
+ *                  [...X X X X*- - - - - - -$X X X - - X X X X X ...]
+ *
+ *                  where * is the current location of the defrag method,
+ *                  and $ is the location of the next data to be moved
+ *
+ *                  As you can see, there is empty space between * and $
+ *
+ *                  This method allows you to detect how much, and then
+ *                  use it.
+ */
 inline tm_size_t Pool_space_free_in_defrag(Pool *pool){
     if(TM_DEFRAG_loc < TM_DEFRAG_CAN_ALLOC_FREESPACE) return 0;
     return (Pool_location(pool, Pool_upool_get_index(pool, TM_DEFRAG_temp)) -
@@ -299,6 +391,10 @@ inline tm_size_t Pool_space_free_in_defrag(Pool *pool){
 }
 
 /**         Local                                                             */
+/**
+ * \brief           After a defrag, the freed values must be loaded from the
+ *                  uheap stack
+ */
 void Pool_load_freed_after_defrag(Pool *pool){
     // move ustack to local as Pool_freed_append uses it
     tm_index_t ustack = pool->ustack;

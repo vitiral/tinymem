@@ -271,6 +271,15 @@ void Pool_freed_array_reset(Pool *pool);
 
 /*---------------------------------------------------------------------------*/
 /**
+ * \brief           completely reload the freed data
+ *                  Used when there has been an (expected) failure in an
+ *                  internal process
+ *                  Be sure to clear the upool first
+ */
+void Pool_reload_free(Pool *pool);
+
+/*---------------------------------------------------------------------------*/
+/**
  * \brief           Various data type casts
  */
 #define Pool_char_p(pool, index)        ((char *)Pool_void(pool, index))
