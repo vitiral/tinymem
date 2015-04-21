@@ -267,6 +267,7 @@ void Pool_upool_clear(Pool *pool);
  * \brief           clear freed array (loosing all data)
  */
 void Pool_freed_reset(Pool *pool);
+void Pool_freed_array_reset(Pool *pool);
 
 /*---------------------------------------------------------------------------*/
 /**

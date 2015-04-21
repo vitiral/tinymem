@@ -28,12 +28,16 @@ void Pool_upool_clear(Pool *pool){
     pool->ustack = TM_UPOOL_SIZE;
 }
 
-
-void Pool_freed_reset(Pool *pool){
-    tm_index_t i;
+void Pool_freed_array_reset(Pool *pool){
+    uint8_t i;
     for(i=0; i<TM_FREED_BINS; i++){
         pool->freed[i] = TM_UPOOL_ERROR;
     }
+}
+
+void Pool_freed_reset(Pool *pool){
+    tm_index_t i;
+    Pool_freed_array_reset(pool);
     // there are no freed values anymore, only filled ones
     for(i=0; i<TM_MAX_FILLED_PTRS; i++){
         pool->points[i] = pool->filled[i];
