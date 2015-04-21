@@ -385,7 +385,9 @@ char *test_tm_threaded(){
     // - to the right of it is free space size=6 (data[3])
     // Free space should be 6 + 2 = 8
     size = 8;
+    while(TM_DEFRAG_loc < 40) Pool_defrag_full_wtime(pool, 0);
     Pool_defrag_full_wtime(pool, 0);
+
     mu_assert(Pool_space_free_in_defrag(pool) == size, "space free second");
     for(i=5; i<55; i+=2){
         Pool_defrag_full_wtime(pool, 0);

@@ -9,7 +9,7 @@ void Pool_load_freed_after_defrag(Pool *pool);
 #endif
 
 void heap_sort(Pool *pool, tm_index_t *a, int16_t count);
-int8_t Pool_filled_sort(Pool *pool);
+int8_t Pool_filled_sort(Pool *pool, int32_t *clocks_left);
 
 #define TM_DEFRAG_CAN_ALLOC    100
 
@@ -36,10 +36,12 @@ int8_t Pool_defrag_full_wtime(Pool *pool, uint16_t maxtime){
     if(!Pool_status(pool, TM_DEFRAG_FULL_IP)){
         goto NOT_STARTED;
     }
-    switch(TM_DEFRAG_loc){
-    case 10:
+    index = TM_DEFRAG_loc;
+    if(index < 30){
         goto SORTING;
-    case 20:
+    }
+    switch(index){
+    case 40:
         index = Pool_upool_get_index(pool, 0);
         goto MOVE_FIRST;
     case TM_DEFRAG_CAN_ALLOC:
@@ -61,7 +63,7 @@ NOT_STARTED:
     TM_DEFRAG_loc = 10;
 
 SORTING:
-    if(Pool_filled_sort(pool)){
+    if(Pool_filled_sort(pool, &clocks_left)){
         return 1;
     }
 
@@ -70,7 +72,7 @@ SORTING:
         return 0;  // there were no filled indexes, done
     }
 
-    TM_DEFRAG_loc = 20;
+    TM_DEFRAG_loc = 40;
     index = Pool_upool_get_index(pool, 0);
 #if TM_THREADED
     clocks_left -= 8 + Pool_sizeof(pool, index) / TM_WORD_SIZE;
@@ -193,29 +195,50 @@ void bubble_sort(Pool *pool, tm_index_t *array, tm_index_t len){
 }
 
 
-int8_t Pool_filled_sort(Pool *pool){
-    tm_index_t index, len = 0;
+int8_t Pool_filled_sort(Pool *pool, int32_t *clocks_left){
+#if TM_THREADED
+    int32_t start;
+#endif
+
+    switch(TM_DEFRAG_loc){
+case 10:
     // this function completely deallocates -- there are no freed values or anything
     // else in the upool
+#if TM_THREADED
+    start = clock();
+#endif
+
     Pool_upool_clear(pool);
     Pool_freed_reset(pool);
 
+#if TM_THREADED
+    start = (clock() - start);
+    *clocks_left -= start * CPU_CLOCKS_PER_CLOCK;
+#endif
+
+    TM_DEFRAG_loc = 11;
     // Move used indexes into upool and sort them
-    for(index=0; index<TM_MAX_POOL_PTRS; index++){
-        if(Pool_filled_bool(pool, index)){
-            Pool_upool_set_index(pool, len, index);
-            len++;
+    for(TM_DEFRAG_temp=0; TM_DEFRAG_temp<TM_MAX_POOL_PTRS; TM_DEFRAG_temp++){
+#if TM_THREADED
+        *clocks_left -= 4;
+        if(*clocks_left < 0) return 1;
+#endif
+case 11:
+        if(Pool_filled_bool(pool, TM_DEFRAG_temp)){
+            *clocks_left -= 8;
+            Pool_upool_set_index(pool, TM_DEFRAG_len, TM_DEFRAG_temp);
+            Pool_ualloc(pool, sizeof(tm_index_t));
         }
     }
-    if(!len){
+    if(!TM_DEFRAG_len){
         pool->heap = 1;
         return 0;
     }
 
-    // allocating from ualloc also tracks the length
-    tm_assert(Pool_ualloc(pool, len * sizeof(tm_index_t)) < TM_UPOOL_ERROR, "ualloc");
-
-    heap_sort(pool, (tm_index_t *)pool->upool, len);  // kind of a pun, sorting the heap... haha
+    TM_DEFRAG_loc = 15;
+default:
+    heap_sort(pool, (tm_index_t *)pool->upool, TM_DEFRAG_len);  // kind of a pun, sorting the heap... haha
+    }
     return 0;
 }
 
