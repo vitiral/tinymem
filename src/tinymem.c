@@ -13,6 +13,15 @@ inline tm_index_t tm_alloc(tm_size_t size){
     return Pool_alloc(&pool, size);
 }
 
+tm_index_t tm_alloc_force(tm_size_t size){
+    tm_index_t index;
+    while(tm_status(0, TM_ANY_DEFRAG)) tm_thread();
+    index = tm_alloc(size);
+    if(index) return index;
+    while(tm_status(0, TM_ANY_DEFRAG)) tm_thread();
+    return tm_alloc(size);
+}
+
 inline tm_index_t tm_realloc(tm_index_t index, tm_size_t size){
     return Pool_realloc(&pool, index, size);
 }

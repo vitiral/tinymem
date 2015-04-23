@@ -42,6 +42,22 @@ inline tm_index_t tm_alloc(tm_size_t size);
 
 /*---------------------------------------------------------------------------*/
 /**
+ * \brief           allocate memory from the tinymem pool(s).
+ *
+ *                  If allocation is not possible, finish the triggered
+ *                  defragmentation routine and allocate again
+ *
+ *                  This function can take a very long time (in the
+ *                  milliseconds) if defragmentation is necessary
+ *
+ * \param size      size of memory allocation
+ * \return          tm_index_t value. Use tm_void or other typecasts to convert
+ *                  to useable pointer
+ */
+tm_index_t tm_alloc_force(tm_size_t size);
+
+/*---------------------------------------------------------------------------*/
+/**
  * \brief           changes the size of memory of index in the tinymem pool(s)
  *                  See standard documentation on realloc for more info
  * \param index     tm_index_t to realloc

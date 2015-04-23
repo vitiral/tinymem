@@ -26,6 +26,7 @@
  *                  TODO: not yet used
  */
 #define TM_NUM_POOLS            (1)
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           size of memory pool
@@ -33,6 +34,7 @@
  *                  allocated in a memory pool
  */
 #define TM_POOL_SIZE            ((uint16_t)(0xFFFFFFFF - 1))
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Maximum number of pointers that can be allocated
@@ -52,6 +54,7 @@
  *                  Each pool_ptr uses 50 bits
  */
 #define TM_MAX_POOL_PTRS        (2048)
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           number of freed bins
@@ -64,6 +67,7 @@
  *                  should == 1
  */
 #define TM_FREED_BINS           (16)
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Size that each bin is stored in upool

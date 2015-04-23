@@ -14,9 +14,11 @@
 #include "tinymem.h"
 #include "tm_pool.h"
 
+#define mem_alloc       tm_alloc_force
+
 /* calloc function not defined in tinymem */
 tm_index_t tm_calloc(tm_size_t num, tm_size_t size){
-    tm_index_t index = tm_alloc(num * size);
+    tm_index_t index = mem_alloc(num * size);
     if(!index) return 0;
     memset(tm_uint8_p(index), 0, num*size);
     return index;
@@ -135,7 +137,7 @@ static int pthread_join(pthread_t t, void **res)
 #define pthread_cond_t CONDITION_VARIABLE
 
 /* Hack - replace memalign with malloc, so we can compile */
-#define memalign(A, S)          tm_alloc(S)
+#define memalign(A, S)          mem_alloc(S)
 
 
 #else
@@ -330,7 +332,7 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
         DEBUG_printf("using memalign\n");
         if (m->size > 0) tm_free(m->index);
         m->index = memalign(sizeof(int) << r, size);
-        /*m->index = tm_alloc(size);*/
+        /*m->index = mem_alloc(size);*/
     }
     else if (r < 20)
     {
@@ -366,7 +368,7 @@ static void bin_alloc(struct bin *m, size_t size, unsigned r)
         /* malloc */
         DEBUG_printf("using malloc\n");
         if (m->size > 0) tm_free(m->index);
-        m->index = tm_alloc(size);
+        m->index = mem_alloc(size);
     }
     if (!m->index)
     {
@@ -480,7 +482,7 @@ static void malloc_test(void *ptr, size_t stack_len)
     }
 #endif
 
-    p.m = tm_alloc(st->bins * sizeof(struct bin));
+    p.m = mem_alloc(st->bins * sizeof(struct bin));
     mybin = (struct bin *)tm_void(p.m);
     p.bins = st->bins;
     p.size = st->size;
@@ -595,8 +597,8 @@ int main(int argc, char *argv[])
     int i_max = I_MAX;
     size_t size = MSIZE;
     struct thread_st *st;
-    printf("Skipping t-test -- threaded not ready yet\n");
-    return 0;       // not ready for this yet
+    /*printf("Skipping t-test -- threaded not ready yet\n");*/
+    /*return 0;       // not ready for this yet*/
 
     tm_init();
 
