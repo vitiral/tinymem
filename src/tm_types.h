@@ -23,9 +23,6 @@
 #define TM_WORD_SIZE    sizeof(int)
 #endif
 
-#ifndef TM_THREADED
-#define TM_THREADED     0
-#endif
 
 #ifndef TM_THREAD_TIME_US
 #define TM_THREAD_TIME_US      2

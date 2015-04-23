@@ -344,7 +344,6 @@ char *test_tm_free_basic(){
     return NULL;
 }
 
-#if TM_THREADED
 char *test_tm_threaded(){
     uint8_t i, i2, j, n;
     tm_index_t index;
@@ -509,7 +508,6 @@ char *test_tm_threaded_time(){
 
     return NULL;
 }
-#endif
 
 
 char *all_tests(){
@@ -523,10 +521,8 @@ char *all_tests(){
     mu_run_test(test_tm_free_foundation);
     mu_run_test(test_tm_free_basic);
 
-#if TM_THREADED
     mu_run_test(test_tm_threaded);
     mu_run_test(test_tm_threaded_time);
-#endif
     return NULL;
 }
 

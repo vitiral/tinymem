@@ -75,9 +75,6 @@ tm_index_t Pool_find_index(Pool *pool){
 
 tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
     tm_index_t index = 0;
-#if !TM_THREADED    // simple
-    index = Pool_freed_getsize(pool, size);
-#else               // threaded
     if(!Pool_status(pool, TM_DEFRAG_IP)) index = Pool_freed_getsize(pool, size);
     else{   // There is a defrag in progress.
         if(TM_DEFRAG_loc < TM_DEFRAG_CAN_ALLOC) return 0;
@@ -97,7 +94,6 @@ tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
             }
         }
     }
-#endif
     if(index){
         if(!Pool_points_bool(pool, index)){
             tmdebug("ERROR pointer should point, but be unfilled");
@@ -119,37 +115,18 @@ tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
     if(size > Pool_available(pool)) return 0;
     if(size > Pool_heap_left(pool)){
         Pool_status_set(pool, TM_DEFRAG_FULL);
-#if TM_THREADED
         return 0;
-#else   // simple
-        while(Pool_defrag_full(pool));
-        if(size > Pool_heap_left(pool)){
-            Pool_status_set(pool, TM_ERROR);
-            return 0;
-        }
-#endif
     }
     // find an unused index
     if(!Pool_pointers_left(pool)) return 0;
     index = Pool_find_index(pool);
     if(!index){
         Pool_status_set(pool, TM_DEFRAG_FAST);
-#if TM_THREADED
         return 0;
-#else   // simple
-        Pool_defrag_full(pool);  // TODO: simple implemntation
-        index = Pool_find_index(pool);
-        if((!Pool_pointers_left(pool)) || (!index)){
-            Pool_status_set(pool, TM_ERROR);
-            return 0;
-        }
-#endif
     }
-#if TM_THREADED
     if(Pool_status(pool, TM_DEFRAG_IP)){  // allocate from heap during a defrag
         Pool_append_index_during_defrag(pool, index);
     }
-#endif
     Pool_filled_set(pool, index);
     Pool_points_set(pool, index);
     pool->pointers[index] = (poolptr) {.size = size, .ptr = pool->heap};
@@ -176,13 +153,8 @@ tm_index_t Pool_realloc(Pool *pool, tm_index_t index, tm_size_t size){
         if(!Pool_pointers_left(pool)) return 0;
         new_index = Pool_find_index(pool);
         if(!new_index){
-#if TM_THREADED
             Pool_status_set(pool, TM_DEFRAG_FAST);
             return 0;
-#else       // simple
-            Pool_defrag_full(pool);
-            new_index = Pool_find_index(pool);
-#endif
         }
 
         // set the original index to a smaller footprint
@@ -195,9 +167,7 @@ tm_index_t Pool_realloc(Pool *pool, tm_index_t index, tm_size_t size){
 
         // mark changes
         pool->used_bytes -= prev_size - size;
-#if TM_THREADED
         Pool_mark_freed_during_defrag(pool, new_index);
-#endif
         return index;
     } else{  // grow data
         new_index = Pool_alloc(pool, size);
@@ -216,18 +186,13 @@ void Pool_free(Pool *pool, tm_index_t index){
     Pool_filled_clear(pool, index);
     pool->used_bytes -= Pool_sizeof(pool, index);
     pool->used_pointers--;
-#if TM_THREADED
     if(Pool_status(pool, TM_DEFRAG_IP)){
         Pool_mark_freed_during_defrag(pool, index);
         return;
     }
-#endif
     if(!Pool_freed_append(pool, index)){
         tmdebug("requesting defrag!");
         Pool_status_set(pool, TM_DEFRAG_FAST);
-#if !TM_THREADED  // simple
-        Pool_defrag_full(pool);
-#endif
         return;
     }
 }

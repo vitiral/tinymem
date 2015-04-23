@@ -37,10 +37,8 @@
 
 /*---------------------------------------------------------------------------*/
 /**     Local Functions                                                      */
-#if TM_THREADED
 void Pool_append_index_during_defrag(Pool *pool, tm_index_t index);
 void Pool_load_freed_after_defrag(Pool *pool);
-#endif
 
 int8_t heap_sort(Pool *pool, tm_index_t *a, int16_t count, int32_t *clocks_left);
 int8_t Pool_filled_sort(Pool *pool, int32_t *clocks_left);
@@ -72,9 +70,7 @@ int8_t Pool_defrag_full(Pool *pool){
  */
 int8_t Pool_defrag_full_wtime(Pool *pool, uint16_t maxtime){
     tm_index_t index;
-#if TM_THREADED
     int32_t clocks_left = CPU_CLOCKS_PER_US * maxtime;
-#endif
 
     // Select the "location" to goto in the function. Remember that this
     // function returns before it is complete, storing it's location in
@@ -127,10 +123,8 @@ SORTING:
 
     TM_DEFRAG_loc = 40;
     index = Pool_upool_get_index(pool, 0);
-#if TM_THREADED
     clocks_left -= 8 + Pool_sizeof(pool, index) / TM_WORD_SIZE;
     if(clocks_left <= 0) return 1;
-#endif
 
 MOVE_FIRST:
     // we now have sorted indexes by location. We just need to
@@ -144,11 +138,10 @@ MOVE_FIRST:
     TM_DEFRAG_loc = TM_DEFRAG_CAN_ALLOC_FREESPACE;
     for(TM_DEFRAG_temp=1; TM_DEFRAG_temp<TM_DEFRAG_len; TM_DEFRAG_temp++){
         index = Pool_upool_get_index(pool, TM_DEFRAG_temp);
-#if TM_THREADED
         // 13 is an estimate for how many clock cycles the other operations take
         clocks_left -= 13 + Pool_sizeof(pool, index) / TM_WORD_SIZE;
         if(clocks_left <= 0) return 1;
-#endif
+
 MOVE_LOOP:
         memmove(
             Pool_void(pool, TM_DEFRAG_index) + Pool_sizeof(pool, TM_DEFRAG_index),
@@ -173,7 +166,6 @@ MOVE_LOOP:
 
     // TODO: do one more return before this?
 
-#if TM_THREADED
     // Deal with values that were freed during defrag
     if(Pool_status(pool, TM_ERROR)){
         tmdebug("There was an error!");
@@ -183,9 +175,6 @@ MOVE_LOOP:
         Pool_load_freed_after_defrag(pool);
     }
     Pool_status_clear(pool, TM_ERROR);
-#else  // simple
-    Pool_upool_clear(pool);
-#endif
     return 0;
 }
 
@@ -204,9 +193,7 @@ void siftDown(Pool *pool, tm_index_t *a, int16_t start, int16_t count);
  *                  http://rosettacode.org/wiki/Sorting_algorithms/Heapsort#C
  */
 int8_t heap_sort(Pool *pool, tm_index_t *a, int16_t count, int32_t *clocks_left){
-#if TM_THREADED
     int32_t start = clock();
-#endif
 
     // TODO: this uses clock() because I do not know a way to predict how
     //      long a heap sort operation will take. Is this possible?
@@ -217,9 +204,7 @@ case TM_DEFRAG_CAN_ALLOC:
     for (TM_DEFRAG_temp = (int16_t)(count-2)/2, TM_DEFRAG_loc = TM_DEFRAG_CAN_ALLOC + 1;
             TM_DEFRAG_itemp >= 0;
             TM_DEFRAG_temp = TM_DEFRAG_itemp - 1) {
-#if TM_THREADED
         if(*clocks_left < (clock() - start) * CPU_CLOCKS_PER_CLOCK) return 1;
-#endif
 case TM_DEFRAG_CAN_ALLOC + 1:
         siftDown(pool, a, TM_DEFRAG_itemp, count);
     }
@@ -227,16 +212,12 @@ case TM_DEFRAG_CAN_ALLOC + 1:
     for (TM_DEFRAG_temp=(int16_t)(count-1), TM_DEFRAG_loc = TM_DEFRAG_CAN_ALLOC + 2;
             TM_DEFRAG_itemp > 0;
             TM_DEFRAG_temp = TM_DEFRAG_itemp - 1) {
-#if TM_THREADED
         if(*clocks_left < (clock() - start) * CPU_CLOCKS_PER_CLOCK) return 1;
-#endif
 case TM_DEFRAG_CAN_ALLOC + 2:
         SWAP(a[TM_DEFRAG_itemp], a[0]);
         siftDown(pool, a, 0, TM_DEFRAG_itemp);
     }
-#if TM_THREADED
     *clocks_left -= (clock() - start) * CPU_CLOCKS_PER_CLOCK;
-#endif
     return 0;
 default:
     assert(0);
@@ -270,33 +251,26 @@ void siftDown(Pool *pool, tm_index_t *a, int16_t start, int16_t end){
  *                  - sort indexes                      (heap only allocation)
  */
 int8_t Pool_filled_sort(Pool *pool, int32_t *clocks_left){
-#if TM_THREADED
     int32_t start;
-#endif
 
     switch(TM_DEFRAG_loc){
 case 10:
     // this function completely deallocates -- there are no freed values or anything
     // else in the upool
-#if TM_THREADED
     start = clock();
-#endif
 
     Pool_upool_clear(pool);
     Pool_freed_reset(pool);
 
-#if TM_THREADED
     start = (clock() - start);
     *clocks_left -= start * CPU_CLOCKS_PER_CLOCK;
-#endif
 
     TM_DEFRAG_loc = 11;
     // Move used indexes into upool and sort them
     for(TM_DEFRAG_temp=0; TM_DEFRAG_temp<TM_MAX_POOL_PTRS; TM_DEFRAG_temp++){
-#if TM_THREADED
         *clocks_left -= 4;
         if(*clocks_left < 0) return 1;
-#endif
+
 case 11:
         if(Pool_filled_bool(pool, TM_DEFRAG_temp)){
             *clocks_left -= 8;
@@ -311,13 +285,13 @@ case 11:
     // Use index instead of length, as the uheap can change during sorting
     TM_DEFRAG_index = TM_DEFRAG_len;
     TM_DEFRAG_loc = TM_DEFRAG_CAN_ALLOC;        // Allow allocation (on heap)
+
 default:
     return heap_sort(pool, (tm_index_t *)pool->upool, TM_DEFRAG_index, clocks_left);
     }
 }
 
 
-#if TM_THREADED
 /*---------------------------------------------------------------------------*/
 /**     Threading Helper Functions                                           */
 /**       -  Global                                                          */
@@ -409,5 +383,3 @@ void Pool_load_freed_after_defrag(Pool *pool){
         ustack += sizeof(tm_index_t);
     }
 }
-
-#endif

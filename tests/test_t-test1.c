@@ -595,10 +595,8 @@ int main(int argc, char *argv[])
     int i_max = I_MAX;
     size_t size = MSIZE;
     struct thread_st *st;
-#if TM_THREADED
     printf("Skipping t-test -- threaded not ready yet\n");
     return 0;       // not ready for this yet
-#endif
 
     tm_init();
 

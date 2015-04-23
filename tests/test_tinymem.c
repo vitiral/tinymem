@@ -137,11 +137,9 @@ char *test_basic(){
         free_index(indexes, i);
         mu_assert(!tm_status(0, TM_ANY_DEFRAG), "no defrag request");
     }
-#if TM_THREADED
     alloc_index(lindexes, 0, TM_POOL_SIZE / 3);
     mu_assert(tm_status(0, TM_ANY_DEFRAG), "defrag request");
     while(tm_thread());  // perform defrag
-#endif
     mu_assert(alloc_index(lindexes, 0, TM_POOL_SIZE / 3), "allocate large");
     mu_assert(check_indexes(indexes, MAXPTRS), "check indexes");
     mu_assert(check_indexes(lindexes, 1), "check lindexes");
@@ -181,10 +179,8 @@ char *test_thrash(){
 
         // allocate all free memory as a big_index
         if(!alloc_index(big_indexes, big_i, mem_free / 2)){
-#if TM_THREADED
             while(tm_thread());  // finish defrag
             if(alloc_index(big_indexes, big_i, mem_free / 2)) goto good;
-#endif
             tmdebug("mem_free=%u", mem_free);
             tm_print_stats();
             mu_assert(0, "alloc large");
