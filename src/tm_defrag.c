@@ -123,7 +123,7 @@ SORTING:
 
     TM_DEFRAG_loc = 40;
     index = Pool_upool_get_index(pool, 0);
-    clocks_left -= 8 + Pool_sizeof(pool, index) / TM_WORD_SIZE;
+    clocks_left -= 8 + Pool_sizeof(pool, index) / TM_ALIGN_BYTES;
     if(clocks_left <= 0) return 1;
 
 MOVE_FIRST:
@@ -139,7 +139,7 @@ MOVE_FIRST:
     for(TM_DEFRAG_temp=1; TM_DEFRAG_temp<TM_DEFRAG_len; TM_DEFRAG_temp++){
         index = Pool_upool_get_index(pool, TM_DEFRAG_temp);
         // 13 is an estimate for how many clock cycles the other operations take
-        clocks_left -= 13 + Pool_sizeof(pool, index) / TM_WORD_SIZE;
+        clocks_left -= 13 + Pool_sizeof(pool, index) / TM_ALIGN_BYTES;
         if(clocks_left <= 0) return 1;
 
 MOVE_LOOP:

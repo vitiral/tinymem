@@ -75,7 +75,7 @@ tm_index_t Pool_find_index(Pool *pool){
 
 tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
     tm_index_t index = 0;
-    size += size % TM_WORD_SIZE;
+    size += size % TM_ALIGN_BYTES;
     if(!Pool_status(pool, TM_DEFRAG_IP)) index = Pool_freed_getsize(pool, size);
     else{   // There is a defrag in progress.
         if(TM_DEFRAG_loc < TM_DEFRAG_CAN_ALLOC) return 0;

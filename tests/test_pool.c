@@ -4,7 +4,7 @@
 #include "time.h"
 
 #define TABLE_STANDIN NULL
-#define COMPUTE_SIZE(size)      ((size) + (size) % TM_WORD_SIZE)
+#define COMPUTE_SIZE(size)      ((size) + (size) % TM_ALIGN_BYTES)
 
 
 char *test_tm_pool_new(){

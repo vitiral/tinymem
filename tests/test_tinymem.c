@@ -28,7 +28,7 @@ bool check_sizes(tm_index_t *indexes, tm_index_t len, tm_size_t maxlen){
                 tmdebug("CS:Fake Valid data");
                 return false;
             }
-            if(tm_sizeof(indexes[i]) != (i % maxlen + 1) + (i % maxlen + 1) % TM_WORD_SIZE){
+            if(tm_sizeof(indexes[i]) != (i % maxlen + 1) + (i % maxlen + 1) % TM_ALIGN_BYTES){
                 tmdebug("CS:Index wrong size. i=%u, expected=%u, size=%u",
                         i, i % maxlen + 1, tm_sizeof(indexes[i]));
                 return false;
@@ -91,7 +91,7 @@ bool alloc_index(tm_index_t *indexes, tm_index_t index, tm_size_t size){
     uint8_t *data;
     indexes[index] = tm_alloc(size);
     if(!indexes[index]) return false;
-    size += size % TM_WORD_SIZE;
+    size += size % TM_ALIGN_BYTES;
     mem_used += size;
     if(tm_sizeof(indexes[index]) != size){
         tmdebug("alloc size wrong size: %u != %u", tm_sizeof(indexes[index]), size);

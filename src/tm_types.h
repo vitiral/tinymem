@@ -19,8 +19,8 @@
 #include "tinymem_platform.h"
 
 
-#ifndef TM_WORD_SIZE
-#define TM_WORD_SIZE    sizeof(int)
+#ifndef TM_ALIGN_BYTES
+#define TM_ALIGN_BYTES    sizeof(int)
 #endif
 
 
