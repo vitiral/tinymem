@@ -130,8 +130,8 @@ MOVE_FIRST:
     // we now have sorted indexes by location. We just need to
     // move all memory to the left
     // First memory can be moved to loc 1
-    memmove(Pool_location_void(pool, 1), Pool_void(pool, index), Pool_sizeof(pool, index));
-    Pool_location_set(pool, index, 1);
+    memmove(Pool_location_void(pool, 0), Pool_void(pool, index), Pool_sizeof(pool, index));
+    Pool_location_set(pool, index, 0);
 
     // Set everything up for the loop and run it
     TM_DEFRAG_index = index;
@@ -279,7 +279,7 @@ case 11:
         }
     }
     if(!TM_DEFRAG_len){
-        pool->heap = 1;
+        pool->heap = 0;
         return 0;
     }
     // Use index instead of length, as the uheap can change during sorting

@@ -12,9 +12,9 @@ char *test_tm_pool_new(){
 
     pool = Pool_new();
     mu_assert(pool, "Pool was malloced");
-    mu_assert(pool->heap == 1, "heap NULL");
+    mu_assert(pool->heap == 0, "heap NULL");
     mu_assert(pool->stack == TM_POOL_SIZE, "new stack");
-    mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - 1, "pool left");
+    mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE, "pool left");
 
     mu_assert(pool->filled[0] == 0, "filled NULL");
     mu_assert(pool->filled[TM_MAX_FILLED_PTRS - 1] == 0x00, "filled end");
@@ -40,7 +40,7 @@ char *test_tm_pool_new(){
 
 char *test_tm_pool_alloc(){
     uint8_t i, n;
-    uint16_t heap = 1;
+    uint16_t heap = 0;
     Pool *pool;
     tm_index_t index;
     tm_index_t indexes[10];
@@ -76,7 +76,7 @@ char *test_tm_pool_alloc(){
 char *test_tm_pool_realloc(){
     tm_index_t index, prev_index, other_index;
     uint8_t i, n;
-    uint16_t used = 1;
+    uint16_t used = 0;
     uint16_t used_ptrs = 1;
     Pool *pool;
 
@@ -150,20 +150,20 @@ char *test_tm_pool_defrag_full(){
         }
     }
     mu_assert(pool->used_pointers == 1 + 200, "fdefrag used pointers");
-    mu_assert(pool->used_bytes == 1 + calculated_use, "fdefrag used bytes");
-    mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - 1 - calculated_use, "fdefrag heap left");
-    mu_assert(Pool_available(pool) == TM_POOL_SIZE - 1 - calculated_use, "fdefrag available 1");
+    mu_assert(pool->used_bytes == calculated_use, "fdefrag used bytes");
+    mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - calculated_use, "fdefrag heap left");
+    mu_assert(Pool_available(pool) == TM_POOL_SIZE - calculated_use, "fdefrag available 1");
     // free odd elements
     for(i=1; i<201; i+=2){
         Pool_free(pool, data[i]);
     }
-    mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - 1 - calculated_use, "fdefrag heap left 2");
-    mu_assert(Pool_available(pool) == TM_POOL_SIZE - 1 - 20200, "fdefrag available 2");
+    mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - calculated_use, "fdefrag heap left 2");
+    mu_assert(Pool_available(pool) == TM_POOL_SIZE - 20200, "fdefrag available 2");
 
     while(Pool_defrag_full(pool));
 
-    mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - 20200 - 1, "fdefrag heap left 3");
-    mu_assert(Pool_available(pool) == TM_POOL_SIZE - 20200 - 1, "defrag available 3");
+    mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - 20200, "fdefrag heap left 3");
+    mu_assert(Pool_available(pool) == TM_POOL_SIZE - 20200, "defrag available 3");
     mu_assert(pool->used_pointers == 101, "defrag ptrs used 3");
     c = 0;
     for(i=1; i<201; i++){
@@ -297,7 +297,7 @@ char *test_tm_free_basic(){
         mu_assert(Pool_freed_isvalid(pool), "freed isvalid");
         // TODO: load values
     }
-    heap = 5050 + 1;
+    heap = 5050;
     mu_assert(pool->heap == heap, "fbasic heap1");
     j = 0;
     for(i=2; i<100; i+=2){ // free the even ones

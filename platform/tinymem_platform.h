@@ -33,7 +33,7 @@
  *                  This is the maximum amount of memory that can be
  *                  allocated in a memory pool
  */
-#define TM_POOL_SIZE            ((uint16_t)(0xFFFFFFFF - 1))
+#define TM_POOL_SIZE            (0xFFFF - (0xFFFF % TM_WORD_SIZE))
 
 /*---------------------------------------------------------------------------*/
 /**

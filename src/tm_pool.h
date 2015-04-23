@@ -48,12 +48,12 @@ typedef struct {
     tm_size_t heap;                       //!< location of completely free memory
     tm_size_t stack;                      //!< used for tempalloc and tempfree, similar to standard stack
     tm_size_t used_bytes;                 //!< total amount of data in use out of size (does not include freed)
+    tm_size_t uheap;                      //!< heap of the upool
+    tm_size_t ustack;                     //!< stack of the upool
     tm_index_t used_pointers;             //!< total amount of pointers used (does not include freed)
     tm_index_t filled_index;              //!< faster lookup of full pointers for defragmentation
     tm_index_t points_index;              //!< faster lookup for unused pointers for allocation
-    tm_size_t uheap;                      //!< heap of the upool
-    tm_size_t ustack;                     //!< stack of the upool
-    tm_index_t temp;                      //!< used in internal methods
+    uint8_t status;                       //!< status byte. Access with Pool_status macros
     uint8_t filled[TM_MAX_FILLED_PTRS]; //!< bit array of filled pointers (only used, not freed)
     uint8_t points[TM_MAX_FILLED_PTRS]; //!< bit array of used pointers (both used and freed)
     poolptr pointers[TM_MAX_POOL_PTRS]; //!< size and location of data in pool
@@ -74,9 +74,9 @@ typedef struct {
  *                  values as possible
  */
 #define Pool_declare()  ((Pool) {       \
-    .heap = 1,                          \
+    .heap = 0,                          \
     .stack = TM_POOL_SIZE,              \
-    .used_bytes = 1,                    \
+    .used_bytes = 0,                    \
     .used_pointers = 1,                 \
     .filled_index = 0,                  \
     .points_index = 0,                  \
@@ -123,19 +123,19 @@ typedef struct {
  * \brief           Get the status bit (0 or 1) of name
  * \return uint8_t  status bit
  */
-#define Pool_status(p, name)         (((p)->pool[0]) & (name))
+#define Pool_status(p, name)         (((p)->status) & (name))
 
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Set the pool status of name to 1
  */
-#define Pool_status_set(p, name)     ((p)->pool[0] |= (name))
+#define Pool_status_set(p, name)     ((p)->status |= (name))
 
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Set the pool status of name to 0
  */
-#define Pool_status_clear(p, name)   ((p)->pool[0] &= ~(name))
+#define Pool_status_clear(p, name)   ((p)->status &= ~(name))
 
 /*---------------------------------------------------------------------------*/
 /**
