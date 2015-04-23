@@ -28,7 +28,7 @@ bool check_sizes(tm_index_t *indexes, tm_index_t len, tm_size_t maxlen){
                 tmdebug("CS:Fake Valid data");
                 return false;
             }
-            if(tm_sizeof(indexes[i]) != (i % maxlen + 1)){
+            if(tm_sizeof(indexes[i]) != (i % maxlen + 1) + (i % maxlen + 1) % TM_WORD_SIZE){
                 tmdebug("CS:Index wrong size. i=%u, expected=%u, size=%u",
                         i, i % maxlen + 1, tm_sizeof(indexes[i]));
                 return false;
@@ -91,6 +91,7 @@ bool alloc_index(tm_index_t *indexes, tm_index_t index, tm_size_t size){
     uint8_t *data;
     indexes[index] = tm_alloc(size);
     if(!indexes[index]) return false;
+    size += size % TM_WORD_SIZE;
     mem_used += size;
     if(tm_sizeof(indexes[index]) != size){
         tmdebug("alloc size wrong size: %u != %u", tm_sizeof(indexes[index]), size);
@@ -113,7 +114,7 @@ bool free_index(tm_index_t *indexes, tm_index_t index){
 
 char *test_basic(){
     // first allocate and free to the full extent possible without requiring a defrag
-    const tm_size_t maxlen = (TM_POOL_SIZE / TM_MAX_POOL_PTRS) * 2;
+    const tm_size_t maxlen = (TM_POOL_SIZE / TM_MAX_POOL_PTRS);
     tm_size_t i;
     tm_index_t indexes[MAXPTRS] = {0};
     tm_index_t lindexes[1];
@@ -153,7 +154,7 @@ char *test_thrash(){
     // do a sliding scale allocation / free where it starts out that
     // memory is allocated in tiny chunks and then gets more and more
     // allocated into large chunks
-    const tm_size_t maxlen = (TM_POOL_SIZE / TM_MAX_POOL_PTRS) * 2;
+    const tm_size_t maxlen = (TM_POOL_SIZE / TM_MAX_POOL_PTRS);
     const big_len = 100;
     uint8_t myhash;
     tm_index_t i, ind_i = 0, big_i = 0, temp;

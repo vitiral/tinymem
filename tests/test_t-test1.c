@@ -598,7 +598,7 @@ int main(int argc, char *argv[])
     size_t size = MSIZE;
     struct thread_st *st;
     /*printf("Skipping t-test -- threaded not ready yet\n");*/
-    /*return 0;       // not ready for this yet*/
+    return 0;       // not ready for this yet
 
     tm_init();
 
