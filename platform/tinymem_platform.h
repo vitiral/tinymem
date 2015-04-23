@@ -18,7 +18,7 @@
 /**
  * \brief           Max time allowed per run of the thread (in microseconds)
 */
-#define TM_THREAD_TIME_US      2
+#define TM_THREAD_TIME_US      5
 
 /*---------------------------------------------------------------------------*/
 /**
