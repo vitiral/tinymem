@@ -4,6 +4,7 @@
 #include "time.h"
 
 #define TABLE_STANDIN NULL
+#define COMPUTE_SIZE(size)      ((size) + (size) % TM_WORD_SIZE)
 
 
 char *test_tm_pool_new(){
@@ -133,14 +134,14 @@ char *test_tm_pool_defrag_full(){
     tm_index_t c;
     tm_index_t data[201];
     tm_size_t used = 0;
-    const tm_size_t calculated_use = 40200;
+    const tm_size_t calculated_use = 40400;
     Pool *pool = Pool_new();
     mu_assert(pool->stack == TM_POOL_SIZE, "new stack");
     mu_assert(pool, "fdefrag new");
     // allocate a bunch of data and initialize it
     c = 0;
     for(i=1; i<201; i++){
-        used += i*2;
+        used += COMPUTE_SIZE(i*2);
         mu_assert(pool->stack == TM_POOL_SIZE, "using stack");
         data[i] = Pool_alloc(pool, i * 2);
         mu_assert(data[i], "fdefrag alloc");
@@ -291,19 +292,19 @@ char *test_tm_free_basic(){
         indexes[i] = Pool_alloc(pool, i+1);
         mu_assert(indexes[i], "fbasic alloc");
         used_ptrs++;
-        used_bytes+=i+1;
+        used_bytes+= COMPUTE_SIZE(i+1);
         mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
         mu_assert(used_bytes == pool->used_bytes, "used bytes");
         mu_assert(Pool_freed_isvalid(pool), "freed isvalid");
         // TODO: load values
     }
-    heap = 5050;
+    heap = 5200;
     mu_assert(pool->heap == heap, "fbasic heap1");
     j = 0;
     for(i=2; i<100; i+=2){ // free the even ones
         Pool_free(pool, indexes[i]);
         used_ptrs--;
-        used_bytes-=i+1;
+        used_bytes-= COMPUTE_SIZE(i+1);
         mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
         mu_assert(used_bytes == pool->used_bytes, "used bytes");
         j+=2;
@@ -324,13 +325,13 @@ char *test_tm_free_basic(){
     mu_assert(pool->heap == heap, "fbasic heap2"); // heap doesn't change
 
     for(i=98; i>0; i-=2){   // allocate the even ones again (in reverse order)
-        mu_assert(Pool_sizeof(pool, indexes[i]) == i+1, "fbasic size");
-        mu_assert(freed_hash(Pool_sizeof(pool, indexes[i])) == freed_hash(i+1), "fbasic hash");
+        mu_assert(Pool_sizeof(pool, indexes[i]) == COMPUTE_SIZE(i+1), "fbasic size");
+        mu_assert(freed_hash(Pool_sizeof(pool, indexes[i])) == freed_hash(COMPUTE_SIZE(i+1)), "fbasic hash");
         indexes[i] = Pool_alloc(pool, i+1);
         mu_assert(indexes[i], "fbasic alloc2");
         mu_assert(pool->heap == heap, "fbasic heap continuous"); // heap doesn't change
         used_ptrs++;
-        used_bytes+=i+1;
+        used_bytes+=COMPUTE_SIZE(i+1);
         mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
         mu_assert(used_bytes == pool->used_bytes, "used bytes");
         mu_assert(Pool_freed_isvalid(pool), "freed isvalid");
@@ -380,17 +381,17 @@ char *test_tm_threaded(){
     mu_assert(Pool_space_free_in_defrag(pool) == 0, "space free first");
     // First move.
     // - index is size 4 (data[2])
-    // - to the left of it is free space size=2 (data[1])
-    // - to the right of it is free space size=6 (data[3])
-    // Free space should be 6 + 2 = 8
-    size = 8;
+    // - to the left of it is free space size=4 (data[1])
+    // - to the right of it is free space size=8 (data[3])
+    // Free space should be 4 + 8 = 12
+    size = 12;
     while(TM_DEFRAG_loc < 40) Pool_defrag_full_wtime(pool, 0);
     Pool_defrag_full_wtime(pool, 0);
 
     mu_assert(Pool_space_free_in_defrag(pool) == size, "space free second");
     for(i=5; i<55; i+=2){
         Pool_defrag_full_wtime(pool, 0);
-        size += i * 2;
+        size += COMPUTE_SIZE(i * 2);
         mu_assert(Pool_space_free_in_defrag(pool) == size, "space free");
     }
 
@@ -404,7 +405,7 @@ char *test_tm_threaded(){
         data[i] = Pool_alloc(pool, i * 2);
         mu_assert(data[i], "alloc during defrag");
         mu_assert(heap == pool->heap, "not allocated off heap");
-        size = size - i*2;
+        size -= COMPUTE_SIZE(i*2);
         mu_assert(Pool_space_free_in_defrag(pool) == size, "free space 1");
         for(j=0;j<i;j++){
             Pool_uint16_p(pool, data[i])[j] = c;
@@ -412,7 +413,7 @@ char *test_tm_threaded(){
         }
         if((i>10) && i%3){  // throw in some random defrags
             Pool_defrag_full_wtime(pool, 0);
-             size += i2 * 2;
+             size += COMPUTE_SIZE(i2 * 2);
              mu_assert(Pool_space_free_in_defrag(pool) == size, "space free 2");
             i2 += 2;
         }
@@ -423,7 +424,7 @@ char *test_tm_threaded(){
     c2 = 0;
     tmdebug("free in defrag=%u, size=%u", Pool_space_free_in_defrag(pool), size);
     for(i=1; i<201; i++){
-        mu_assert(Pool_sizeof(pool, i) == i*2, "defrag size");
+        mu_assert(Pool_sizeof(pool, i) == COMPUTE_SIZE(i*2), "defrag size");
         if(!(i%2)){     // even
             for(j=0;j<i;j++, c++) mu_assert(Pool_uint16_p(pool, data[i])[j] == c, "defrag data inconcistency");
         }
@@ -459,7 +460,7 @@ char *test_tm_threaded(){
 
     c=0, c2=0;
     for(i=1; i<201; i++){
-        mu_assert(Pool_sizeof(pool, i) == i*2, "defrag size");
+        mu_assert(Pool_sizeof(pool, i) == COMPUTE_SIZE(i*2), "defrag size");
         if(!(i%2)){     // even
             if((i>=150) && (i<180)){
                 mu_assert(Pool_uint16_p(pool, data[i])[j] == 0xF5F5, "new alloc");
