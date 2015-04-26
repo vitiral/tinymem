@@ -47,6 +47,7 @@ uint8_t tm_thread(){
     if(Pool_status(&pool, TM_ANY_DEFRAG)){
         return Pool_defrag_full(&pool);
     }
+    return 0;
 }
 
 inline void*  tm_void(tm_index_t index){
