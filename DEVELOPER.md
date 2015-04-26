@@ -165,6 +165,7 @@ When a value is requested:
     - found: returns the index of the found value
     - not found: allocates new space on the heap
 
+
 ### Speed concerns
 When there are many freed values:
 - may take a long time to search through the freed bin for
@@ -178,6 +179,62 @@ When there are many freed sizes:
 
 To reduce these effects, a [Fast Defragmentation](#fast-defragmentation) method
 needs to be implemented that consolidates freed indexes
+
+### LinkedIndexArray for hash table implementation
+
+The original LIA (Linked Index Array) simply has a `tm_index_t prev` and then
+14 indexes of freed data, with a NULL index indicating the end of the freed data
+(and all prev arrays are always full).
+
+This unfortunately does not handle hash overlaps at all, an issue which I would
+like to address
+
+the upool has a constraint that all allocations must be the same size, so any
+implementation has to address this issue.
+
+Therefore the LinkedIndexArray will have to be split from the LinkedIndexHeadArray
+They will both be the same size, except the HeadArray will use one of the indexes
+(the last one) to store the size_t of the indexes.
+
+This means that the head index can theoretically be empty, as it won’t be able to
+be deleted until it can move all it’s size into the next lowest index. This will
+significnatly complicate an already complicated data structure pop/append routine.
+
+It will, however, significantly simply the finding algorithm, as all arrays will
+have a guaranteed size!
+
+This will handle overlaps in the traditional manner and, best of all, has the
+following advantages:
+- search all freed values for an *arbitrarily sized* index
+- print statistics -- can now be easily printed by *size* instead of by *bin*
+- significantly speed up the worst case time for alloc.
+    unless the user is literally allocating/freeing all *differently sized*
+    locations, the most time it will take to find an index will be (S), where
+    S is the number of sizes. More commonly it will be CEILING(S/B), where B is
+    the number of bins/hashes.
+
+This makes the approach more like a binary tree rather than a linked list. In
+addition, it allows the possibility of applying a first-fit approach for certain
+cases, which could be very beneficial.
+
+Disadvantages are:
+- It could end up taking a HUGE amount of the upool, as each size will take it’s
+    own LinkedIndexArray Therefore it may be smart to reduce the number of indexes
+    in each array to only 4-6 (instead of 14). This however reduces the number of
+    freed indexes allowed by about 10%
+- in situations where a large number of sizes are being freed, it will not
+    significantly improve perforamnce. In situations like this, it may be
+    smart to apply a first-fit policy on the whole system
+- There are other possibilities, such as:
+    - sorting the indexes by size and doing a faster lookup
+    - using a binning method instead (very fast first-fit with some lookup policy)
+
+The other possibilities are certainly being considered, and they have a lot of merit,
+especially the binning policy. If the binning policy could be tied to a fast
+defragmentation method it would be by far the best method, as it has a worst case
+of only a few clock cycles for both allocation and freeing (except for very large
+amounts of data (>16k))
+
 
 # Minor Issues
 The two major issues with microcontroller memory management are now resolved:
