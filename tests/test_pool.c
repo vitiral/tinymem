@@ -1,16 +1,16 @@
 #include "minunit.h"
-#include "tinymem_pool.h"
+#include "tm_pool.h"
 #include "time.h"
 
 #define TABLE_STANDIN NULL
 
-Pool gpool = Pool_declare();
+Pool gpool = Pool_init();
 
 char *test_tm_pool_new(){
     tm_index_t i;
     tm_size_t size;
     Pool *pool = &gpool;
-    *pool = Pool_declare();
+    *pool = Pool_init();
 
     mu_assert(Pool_heap(pool) == 0);
     mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE);
@@ -41,7 +41,7 @@ char *test_tm_pool_alloc(){
     uint8_t i, n;
     uint16_t heap = 0, ptrs=1;
     Pool *pool = &gpool;
-    *pool = Pool_declare();
+    *pool = Pool_init();
 
     mu_assert(Pool_freed_count(pool, &size) == 0);
     mu_assert(size == 0);
@@ -88,7 +88,7 @@ char *test_tm_free_basic(){
     tm_size_t temp;
     tm_index_t indexes[100];
     tm_index_t index;
-    gpool = Pool_declare();
+    gpool = Pool_init();
     Pool *pool = &gpool;
 
     // allocate a bunch of memory, then free chunks of it.

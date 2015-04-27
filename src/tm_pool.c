@@ -1,31 +1,25 @@
-#include "tinymem_pool.h"
+#include "tm_pool.h"
 
 
 /*---------------------------------------------------------------------------*/
 /*      Local Declarations                                                   */
-tm_index_t Pool_find_index(Pool *pool);
-uint8_t freed_bin(tm_blocks_t size);
-inline void Pool_freed_remove(Pool *pool, tm_index_t index);
-tm_index_t Pool_freed_get(Pool *pool, tm_blocks_t size);
-
+tm_index_t      Pool_find_index(Pool *pool);
+uint8_t         freed_bin(const tm_blocks_t size);
+inline void     Pool_freed_remove(Pool *pool, const tm_index_t index);
+inline void     Pool_freed_insert(Pool *pool, const tm_index_t index);
+tm_index_t      Pool_freed_get(Pool *pool, const tm_blocks_t size);
 #define Pool_free_p(pool, index)  ((free_block *)Pool_void_p(pool, index))
 
 
 /*---------------------------------------------------------------------------*/
-void Pool_init(Pool *pool){
-    *pool = Pool_declare();
-}
-
-
-/*---------------------------------------------------------------------------*/
-void *Pool_void_p(Pool *pool, tm_index_t index){
+void *          Pool_void_p(const Pool *pool, const tm_index_t index){
     // Note: index 0 has location == heap (it is where Pool_heap is stored)
     if(Pool_loc(pool, index) >= Pool_heap(pool)) return NULL;
     return pool->pool + Pool_loc(pool, index);
 }
 
 /*---------------------------------------------------------------------------*/
-tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
+tm_index_t      Pool_alloc(Pool *pool, tm_size_t size){
     tm_index_t index;
     size = TM_ALIGN_BLOCKS(size);
     if(Pool_available_blocks(pool) < size) return 0;
@@ -61,7 +55,7 @@ tm_index_t Pool_alloc(Pool *pool, tm_size_t size){
 }
 
 /*---------------------------------------------------------------------------*/
-void Pool_free(Pool *pool, tm_index_t index){
+void            Pool_free(Pool *pool, const tm_index_t index){
     uint8_t bin;
     if(Pool_loc(pool, index) >= Pool_heap(pool)) return;
     if(index >= TM_MAX_POOL_PTRS || !Pool_filled_bool(pool, index)) return;
@@ -88,7 +82,7 @@ void Pool_free(Pool *pool, tm_index_t index){
 /*      Local Functions                                                      */
 
 /*---------------------------------------------------------------------------*/
-tm_index_t Pool_find_index(Pool *pool){
+tm_index_t      Pool_find_index(Pool *pool){
     unsigned int bit;
     if(!Pool_pointers_left(pool)) return 0;
     while(1){
@@ -113,7 +107,7 @@ tm_index_t Pool_find_index(Pool *pool){
 
 /*---------------------------------------------------------------------------*/
 /*      get the freed bin for blocks                                         */
-uint8_t freed_bin(tm_blocks_t blocks){
+uint8_t         freed_bin(const tm_blocks_t blocks){
     switch(blocks){
         case 1:                     return 0;
         case 2:                     return 1;
@@ -135,7 +129,7 @@ uint8_t freed_bin(tm_blocks_t blocks){
 }
 
 
-inline void Pool_freed_remove(Pool *pool, tm_index_t index){
+inline void     Pool_freed_remove(Pool *pool, const tm_index_t index){
     free_block *free = Pool_free_p(pool, index);
     assert(free);
     if(free->prev){
@@ -147,7 +141,7 @@ inline void Pool_freed_remove(Pool *pool, tm_index_t index){
 }
 
 
-inline void Pool_freed_insert(Pool *pool, tm_index_t index){
+inline void     Pool_freed_insert(Pool *pool, const tm_index_t index){
     uint8_t bin = freed_bin(Pool_blocks(pool, index));
     *Pool_free_p(pool, index) = (free_block){.next=pool->freed[bin], .prev=0};
     if(pool->freed[bin]){
@@ -157,7 +151,7 @@ inline void Pool_freed_insert(Pool *pool, tm_index_t index){
 }
 
 
-tm_index_t Pool_freed_get(Pool *pool, tm_blocks_t blocks){
+tm_index_t      Pool_freed_get(Pool *pool, const tm_blocks_t blocks){
     uint8_t bin;
     bin = freed_bin(blocks);
     tm_index_t index;
@@ -173,7 +167,7 @@ tm_index_t Pool_freed_get(Pool *pool, tm_blocks_t blocks){
 
 /*---------------------------------------------------------------------------*/
 /*      For Debug and Test                                                   */
-tm_index_t Pool_freed_count_bin(Pool *pool, uint8_t bin, tm_size_t *size, bool pnt){
+tm_index_t      Pool_freed_count_bin(Pool *pool, uint8_t bin, tm_size_t *size, bool pnt){
     // Get the number and the size of the items in bin
     tm_index_t prev_index;
     tm_index_t index = pool->freed[bin];
@@ -196,7 +190,7 @@ tm_index_t Pool_freed_count_bin(Pool *pool, uint8_t bin, tm_size_t *size, bool p
     }
 }
 
-tm_index_t Pool_freed_count_print(Pool *pool, tm_size_t *size, bool pnt){
+tm_index_t      Pool_freed_count_print(Pool *pool, tm_size_t *size, bool pnt){
     uint8_t bin;
     tm_size_t size_get;
     tm_index_t count = 0;
@@ -214,7 +208,7 @@ tm_index_t Pool_freed_count(Pool *pool, tm_size_t *size){
     return Pool_freed_count_print(pool, size, false);
 }
 
-bool Pool_freed_isvalid(Pool *pool){
+bool            Pool_freed_isvalid(Pool *pool){
     tm_size_t size;
     tm_index_t count = Pool_freed_count(pool, &size);
     tm_debug("size before=%u", size);
@@ -228,7 +222,7 @@ bool Pool_freed_isvalid(Pool *pool){
 }
 
 
-tm_index_t Pool_freed_full_print(Pool *pool, bool full){
+tm_index_t      Pool_freed_full_print(Pool *pool, bool full){
     uint8_t bin;
     tm_size_t size = 0, size_get;
     tm_index_t count = 0, count_get;
@@ -243,7 +237,7 @@ tm_index_t Pool_freed_full_print(Pool *pool, bool full){
 }
 
 
-tm_index_t Pool_freed_print(Pool *pool){
+tm_index_t      Pool_freed_print(Pool *pool){
     Pool_freed_full_print(pool, false);
 }
 

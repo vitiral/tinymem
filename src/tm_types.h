@@ -28,10 +28,10 @@
 #define TM_ANY_DEFRAG       (TM_DEFRAG_FULL | TM_DEFRAG_FAST | TM_DEFRAG_IP)    // some defrag has been requested
 
 
-typedef uint16_t tm_index_t;
-typedef uint32_t tm_size_t;
-typedef uint16_t tm_blocks_t;
-typedef uint8_t tm_status_type;
+typedef uint16_t        tm_index_t;
+typedef uint32_t        tm_size_t;
+typedef uint16_t        tm_blocks_t;
+typedef uint8_t         tm_status_type;
 
 #endif
 /** @} */
