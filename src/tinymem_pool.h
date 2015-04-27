@@ -18,6 +18,9 @@
 
 #define TM_FREED_BINS           (12)
 #define TM_ALIGN_BYTES          sizeof(free_block)
+#define TM_ALIGN(size)      (((size) % TM_ALIGN_BYTES) ? \
+    ((size) + TM_ALIGN_BYTES - ((size) % TM_ALIGN_BYTES)): (size))
+
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -58,6 +61,7 @@ typedef struct {
     tm_index_t      ptrs_filled;                     //!< total amount of pointers allocated
     tm_index_t      ptrs_freed;                      //!< total amount of pointers freed
     tm_index_t      find_index;                     //!< speed up find index
+    tm_index_t      last_index;                     //!< required to allocate off heap
     uint8_t         status;                         //!< status byte. Access with Pool_status macros
     uint8_t         find_index_bit;                 //!< speed up find index
 } Pool;
@@ -69,15 +73,16 @@ typedef struct {
  *                  values as possible
  */
 #define Pool_declare()  ((Pool) {                               \
-    .filled = {0},                                              \
+    .filled = {1},                      /*NULL is taken*/       \
     .points = {1},                      /*NULL is taken*/       \
     .pointers = {{0, 0}},               /*heap = 0*/            \
     .freed = {0},                                               \
     .filled_bytes = {0},                                        \
     .freed_bytes = {0},                                         \
-    .ptrs_filled = 1,                    /*NULL is "filled"*/    \
-    .ptrs_freed = 0,                                             \
+    .ptrs_filled = 1,                    /*NULL is "filled"*/   \
+    .ptrs_freed = 0,                                            \
     .find_index = 0,                                            \
+    .last_index = 0,                                            \
     .status = 0,                                                \
     .find_index_bit = 1,                /*index 0 is invalid*/  \
 })

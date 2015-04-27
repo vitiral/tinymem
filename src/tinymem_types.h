@@ -4,9 +4,9 @@
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
-#include <assert.h>
 #undef NDEBUG
 #include "tinymem_platform.h"
+#include <assert.h>
 
 
 #ifndef NDEBUG
