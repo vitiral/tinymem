@@ -55,19 +55,5 @@
  */
 #define TM_MAX_POOL_PTRS        (2048)
 
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           Size that each bin is stored in upool
- *
- *                  It is rare that this value should be changed. It is the
- *                  number of elements in the LinkedIndexArray that pool.freed
- *                  uses
- *
- *                  TODO:
- *                  For memory constrained systems, TM_FREED_BINS should == 1
- *                  and this value is irrelevant
- */
-#define TM_FREED_BINSIZE        (14)
-
 
 #endif

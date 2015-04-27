@@ -84,67 +84,18 @@ typedef struct {
 
 /*---------------------------------------------------------------------------*/
 /**
- * \brief           Pool available memory (both heap and inside freed)
- *                  This is how much space is left to allocate after a full
- *                  defragmentation
- * \return tm_size_t  available space in bytes
- */
-#define Pool_available(p)            (TM_POOL_SIZE - (p)->used_bytes)
-
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           Pool available pointers
- *                  This is how many more objects can be allocated
- * \return tm_size_t  available pointer spaces
- */
-#define Pool_pointers_left(p)        (TM_MAX_POOL_PTRS - ((p)->ptrs_filled + (p)->ptrs_filled))
-
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           Memory remaining on the heap
- * \return tm_size_t  Number of bytes remaining on the heap
- */
-#define Pool_heap_left(p)            (TM_POOL_SIZE - Pool_heap(p))
-
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           location of index
- * \return tm_size_t  location in relation to pool.pool
- */
-#define Pool_loc(p, index)              ((p)->pointers[index].loc)
-
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           Get the sizeof data at index in bytes
- * \return tm_size_t  the sizeof the data pointed to by index
- */
-#define Pool_sizeof(p, index)        (Pool_loc((p)->indexes[index].next) - Pool_loc(p, index))
-
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           Get the status bit (0 or 1) of name
- * \return uint8_t  status bit
- */
-#define Pool_status(p, name)         (((p)->status) & (name))
-
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           Set the pool status of name to 1
- */
-#define Pool_status_set(p, name)     ((p)->status |= (name))
-
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           Set the pool status of name to 0
- */
-#define Pool_status_clear(p, name)   ((p)->status &= ~(name))
-
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           Convinience functions
+ * \brief           Access Pool Characteristics
  *                  Pool_filled* does operations on Pool's `filled` array
  *                  Pool_points* does operations on Pool's `points` array
  */
+#define Pool_available(p)            (TM_POOL_SIZE - (p)->filled_bytes)
+#define Pool_pointers_left(p)        (TM_MAX_POOL_PTRS - ((p)->ptrs_filled + (p)->ptrs_filled))
+#define Pool_heap_left(p)            (TM_POOL_SIZE - Pool_heap(p))
+#define Pool_loc(p, index)              ((p)->pointers[index].loc)
+#define Pool_heap(p)                 ((p)->pointers[0].loc)
+#define Pool_next(p, index)          ((p)->pointers[index].next)
+#define Pool_loc_void_p(p, loc)           ((void*)(p)->pool + (loc))
+
 #define BITARRAY_INDEX(index)        (index / 8)
 #define BITARRAY_BIT(index)          (1 << (index % 8))
 #define Pool_filled_bool(p, index)   ((p)->filled[BITARRAY_INDEX(index)] &   BITARRAY_BIT(index))
@@ -153,30 +104,36 @@ typedef struct {
 #define Pool_points_bool(p, index)   ((p)->points[BITARRAY_INDEX(index)] &   BITARRAY_BIT(index))
 #define Pool_points_set(p, index)    ((p)->points[BITARRAY_INDEX(index)] |=  BITARRAY_BIT(index))
 #define Pool_points_clear(p, index)  ((p)->points[BITARRAY_INDEX(index)] &= ~BITARRAY_BIT(index))
-#define Pool_heap(p)                 ((p)->pointers[0].loc)
 
-/*---------------------------------------------------------------------------*/
-/**
- * \brief           move memory from location at index_from to location at
- *                  index_to
- */
 #define Pool_memmove(pool, index_to, index_from)  memmove(              \
             Pool_void_p(pool, index_to),                                  \
             Pool_void_p(pool, index_from),                                \
             Pool_sizeof(pool, index_from)                               \
         )
 
+
 /*---------------------------------------------------------------------------*/
 /**
- * \brief           cast a void pointer of location
+ * \brief           Get, set or clear the status bit (0 or 1) of name
+ * \return uint8_t  status bit
  */
-#define Pool_loc_void_p(p, loc)           ((void*)(p)->pool + (loc))
+#define Pool_status(p, name)         (((p)->status) & (name))
+#define Pool_status_set(p, name)     ((p)->status |= (name))
+#define Pool_status_clear(p, name)   ((p)->status &= ~(name))
 
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           initialize (or reset) a pool
  */
 void            Pool_init(Pool *pool);
+
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           Get the sizeof data at index in bytes
+ * \return tm_size_t  the sizeof the data pointed to by index
+ */
+#define Pool_sizeof(p, index)        (Pool_loc(p, (p)->pointers[index].next) - Pool_loc(p, index))
+
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -212,6 +169,7 @@ tm_index_t        Pool_realloc(Pool *pool, tm_index_t index, tm_size_t size);
  */
 void            Pool_free(Pool *pool, tm_index_t index);
 
+
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           cast a void pointer from index
@@ -232,6 +190,11 @@ inline void*    Pool_void_p(Pool *pool, tm_index_t index);
 #define Pool_uint16_p(pool, index)      ((uint16_t *)Pool_void_p(pool, index))
 #define Pool_int32_p(pool, index)       ((int32_t *)Pool_void_p(pool, index))
 #define Pool_uint32_p(pool, index)      ((uint32_t *)Pool_void_p(pool, index))
+
+/*---------------------------------------------------------------------------*/
+/*      For Debug and Test                                                   */
+tm_index_t Pool_freed_count(Pool *pool, tm_size_t *size);
+tm_index_t Pool_freed_print(Pool *pool);
 
 #endif
 /** @} */

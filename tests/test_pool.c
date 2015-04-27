@@ -9,6 +9,7 @@ Pool gpool = Pool_declare();
 
 char *test_tm_pool_new(){
     tm_index_t i;
+    tm_size_t size;
     Pool *pool = &gpool;
     *pool = Pool_declare();
 
@@ -26,25 +27,36 @@ char *test_tm_pool_new(){
         mu_assert(pool->pointers[i].loc == 0);
         mu_assert(pool->pointers[i].next == 0);
     }
+
+    for(i=0; i<TM_FREED_BINS; i++){
+        mu_assert(pool->freed[i] == 0);
+    }
+    mu_assert(Pool_freed_count(pool, &size) == 0);
+    mu_assert(size == 0);
     return NULL;
 }
 
 
 char *test_tm_pool_alloc(){
+    tm_size_t size;
     uint8_t i, n;
-    uint16_t heap = 0;
+    uint16_t heap = 0, ptrs=1;
     Pool *pool = &gpool;
     *pool = Pool_declare();
+
+    mu_assert(Pool_freed_count(pool, &size) == 0);
+    mu_assert(size == 0);
 
     tm_index_t index;
     tm_index_t indexes[10];
 
     index = Pool_alloc(pool, sizeof(uint32_t));
+    tm_debug("index=%u", index);
     mu_assert(index == 1);
     mu_assert(pool->pointers[1].loc == heap);
-    heap += sizeof(uint32_t);
+    heap += sizeof(uint32_t); ptrs++;
     mu_assert(Pool_heap(pool) == heap);
-
+    mu_assert(pool->ptrs_filled == ptrs);
 
     *Pool_uint32_p(pool, index) = 42;
     mu_assert(*Pool_uint32_p(pool, index) == 42);
@@ -52,8 +64,9 @@ char *test_tm_pool_alloc(){
         indexes[i] = Pool_alloc(pool, 8);
         mu_assert(indexes[i]);
         mu_assert(pool->pointers[i + 2].loc == heap);
-        heap += 8;
+        heap += 8; ptrs++;
         mu_assert(Pool_heap(pool) == heap);
+        mu_assert(pool->ptrs_filled == ptrs);
         mu_assert(i + 2 == indexes[i]);
         for(n=0; n<8; n++) Pool_uint8_p(pool, indexes[i])[n] = n * 10;
     }

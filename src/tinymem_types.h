@@ -5,12 +5,13 @@
 #include <stdint.h>
 #include <stdbool.h>
 #include <assert.h>
-//#undef NDEBUG
+#undef NDEBUG
 #include "tinymem_platform.h"
 
-//#ifndef NDEBUG
-//#define tm_debug(...)      do{printf("[DEBUG](%s,%u):", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n");}while(0)
-//#endif
+
+#ifndef NDEBUG
+#define tm_debug(...)      do{printf("[DEBUG](%s,%u):", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n");}while(0)
+#endif
 
 
 /*---------------------------------------------------------------------------*/
