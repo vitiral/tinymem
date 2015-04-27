@@ -11,6 +11,8 @@
 //#error "Invalid pool ptrs size, must be divisible by int"
 //#endif
 
+#define CEILING(x, y)       (((x) % (y)) ? (x)/(y) + 1 : (x)/(y))
+
 #define TM_POOL_BLOCKS          (TM_POOL_SIZE / sizeof(free_block))
 #define TM_MAX_BIT_INDEXES      (TM_MAX_POOL_PTRS / (8 * sizeof(int)))
 #define MAXUINT                 ((unsigned int) 0xFFFFFFFFFFFFFFFF)
@@ -18,8 +20,9 @@
 
 #define TM_FREED_BINS           (12)
 #define TM_ALIGN_BYTES          sizeof(free_block)
-#define TM_ALIGN(size)      (((size) % TM_ALIGN_BYTES) ? \
+#define TM_ALIGN(size)          (((size) % TM_ALIGN_BYTES) ? \
     ((size) + TM_ALIGN_BYTES - ((size) % TM_ALIGN_BYTES)): (size))
+#define TM_ALIGN_BLOCKS(size)   CEILING(size, TM_ALIGN_BYTES)
 
 
 /*---------------------------------------------------------------------------*/
@@ -28,7 +31,7 @@
  */
 // TODO: packed!
 typedef struct {
-    tm_size_t loc;
+    tm_blocks_t loc;
     tm_index_t next;
 } poolptr;
 #define NULL_poolptr            ((poolptr){.size=0, .ptr=0})
@@ -56,8 +59,8 @@ typedef struct {
     unsigned int    points[TM_MAX_BIT_INDEXES];     //!< bit array of used pointers (both used and freed)
     poolptr         pointers[TM_MAX_POOL_PTRS];     //!< This is the index lookup location
     tm_index_t      freed[TM_FREED_BINS];           //!< binned storage of all freed indexes
-    tm_size_t       filled_bytes;                   //!< total amount of data allocated
-    tm_size_t       freed_bytes;                    //!< total amount of data freed
+    tm_blocks_t       filled_blocks;                   //!< total amount of data allocated
+    tm_blocks_t       freed_blocks;                    //!< total amount of data freed
     tm_index_t      ptrs_filled;                     //!< total amount of pointers allocated
     tm_index_t      ptrs_freed;                      //!< total amount of pointers freed
     tm_index_t      find_index;                     //!< speed up find index
@@ -77,8 +80,8 @@ typedef struct {
     .points = {1},                      /*NULL is taken*/       \
     .pointers = {{0, 0}},               /*heap = 0*/            \
     .freed = {0},                                               \
-    .filled_bytes = {0},                                        \
-    .freed_bytes = {0},                                         \
+    .filled_blocks = {0},                                        \
+    .freed_blocks = {0},                                         \
     .ptrs_filled = 1,                    /*NULL is "filled"*/   \
     .ptrs_freed = 0,                                            \
     .find_index = 0,                                            \
@@ -93,7 +96,8 @@ typedef struct {
  *                  Pool_filled* does operations on Pool's `filled` array
  *                  Pool_points* does operations on Pool's `points` array
  */
-#define Pool_available(p)            (TM_POOL_SIZE - (p)->filled_bytes)
+#define Pool_available_blocks(p)     (TM_POOL_BLOCKS - (p)->filled_blocks)
+#define Pool_available(p)            (Pool_available_blocks(p) * TM_ALIGN_BYTES)
 #define Pool_pointers_left(p)        (TM_MAX_POOL_PTRS - ((p)->ptrs_filled + (p)->ptrs_filled))
 #define Pool_heap_left(p)            (TM_POOL_SIZE - Pool_heap(p))
 #define Pool_loc(p, index)              ((p)->pointers[index].loc)
@@ -137,8 +141,9 @@ void            Pool_init(Pool *pool);
  * \brief           Get the sizeof data at index in bytes
  * \return tm_size_t  the sizeof the data pointed to by index
  */
-#define Pool_sizeof(p, index)        (Pool_loc(p, (p)->pointers[index].next) - Pool_loc(p, index))
-
+#define Pool_sizeof(p, index)        (Pool_blocks(p, index) * TM_ALIGN_BYTES)
+#define Pool_blocks(p, index)        (Pool_loc(p, (p)->pointers[index].next) - \
+        Pool_loc(p, index))
 
 /*---------------------------------------------------------------------------*/
 /**

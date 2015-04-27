@@ -29,7 +29,8 @@
 
 
 typedef uint16_t tm_index_t;
-typedef uint16_t tm_size_t;
+typedef uint32_t tm_size_t;
+typedef uint16_t tm_blocks_t;
 typedef uint8_t tm_status_type;
 
 #endif

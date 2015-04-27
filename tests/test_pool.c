@@ -52,7 +52,7 @@ char *test_tm_pool_alloc(){
     index = Pool_alloc(pool, sizeof(uint32_t));
     mu_assert(index == 1);
     mu_assert(pool->pointers[1].loc == heap);
-    heap += sizeof(uint32_t); ptrs++;
+    heap += TM_ALIGN_BLOCKS(sizeof(uint32_t)); ptrs++;
     mu_assert(Pool_heap(pool) == heap);
     mu_assert(pool->ptrs_filled == ptrs);
 
@@ -62,7 +62,7 @@ char *test_tm_pool_alloc(){
         indexes[i] = Pool_alloc(pool, 8);
         mu_assert(indexes[i]);
         mu_assert(pool->pointers[i + 2].loc == heap);
-        heap += 8; ptrs++;
+        heap += TM_ALIGN_BLOCKS(8); ptrs++;
         mu_assert(Pool_heap(pool) == heap);
         mu_assert(pool->ptrs_filled == ptrs);
         mu_assert(i + 2 == indexes[i]);
@@ -83,7 +83,7 @@ char *test_tm_pool_alloc(){
 char *test_tm_free_basic(){
     int8_t i, j;
     tm_index_t filled_ptrs;
-    tm_index_t filled_bytes;
+    tm_index_t filled_blocks;
     tm_size_t heap;
     tm_size_t temp;
     tm_index_t indexes[100];
@@ -94,30 +94,30 @@ char *test_tm_free_basic(){
     // allocate a bunch of memory, then free chunks of it.
     // Then allocate it again, making sure the heap doesn't change
     filled_ptrs = pool->ptrs_filled;
-    filled_bytes = pool->filled_bytes;
+    filled_blocks = pool->filled_blocks;
     tm_debug("alloc");
     for(i=0; i<100; i++){
         indexes[i] = Pool_alloc(pool, i+1);
         mu_assert(indexes[i]);
         filled_ptrs++;
-        filled_bytes += TM_ALIGN(i+1);
+        filled_blocks += TM_ALIGN_BLOCKS(i+1);
         mu_assert(Pool_sizeof(pool, indexes[i]) == TM_ALIGN(i+1));
         mu_assert(filled_ptrs == pool->ptrs_filled);
-        mu_assert(filled_bytes == pool->filled_bytes);
+        mu_assert(filled_blocks == pool->filled_blocks);
         mu_assert(Pool_freed_isvalid(pool));
         // TODO: load values
     }
     for(i=0; i<100; i++) mu_assert(Pool_sizeof(pool, indexes[i]) == TM_ALIGN(i+1));
 
-    heap = filled_bytes;
+    heap = filled_blocks;
     mu_assert(Pool_heap(pool) == heap);
     tm_debug("freeing");
     for(i=2; i<100; i+=2){ // free the even ones
         Pool_free(pool, indexes[i]);
         filled_ptrs--;
-        filled_bytes -= TM_ALIGN(i+1);
+        filled_blocks -= TM_ALIGN_BLOCKS(i+1);
         mu_assert(filled_ptrs == pool->ptrs_filled);
-        mu_assert(filled_bytes == pool->filled_bytes);
+        mu_assert(filled_blocks == pool->filled_blocks);
         tm_debug("checking %i", i);
         Pool_freed_print(pool);
         mu_assert(Pool_freed_isvalid(pool));
