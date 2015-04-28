@@ -9,17 +9,17 @@
 //#endif
 
 
-#define TM_CEILING(x, y)           (((x) % (y)) ? (x)/(y) + 1 : (x)/(y))
+#define CEILING(x, y)           (((x) % (y)) ? (x)/(y) + 1 : (x)/(y))
 
-#define TM_POOL_BLOCKS          (TM_POOL_SIZE / sizeof(free_block))
-#define TM_MAX_BIT_INDEXES      (TM_MAX_POOL_PTRS / (8 * sizeof(int)))
+#define POOL_BLOCKS          (TM_POOL_SIZE / sizeof(free_block))
+#define MAX_BIT_INDEXES      (TM_MAX_POOL_PTRS / (8 * sizeof(int)))
 #define MAXUINT                 ((unsigned int) 0xFFFFFFFFFFFFFFFF)
 #define INTBITS                 (sizeof(int) * 8)
 
-#define TM_FREED_BINS           (12)
+#define FREED_BINS           (12)
 
 #define ALIGN_BYTES          sizeof(free_block)
-#define ALIGN_BLOCKS(size)   TM_CEILING(size, ALIGN_BYTES)
+#define ALIGN_BLOCKS(size)   CEILING(size, ALIGN_BYTES)
 #define ALIGN(size)          (((size) % ALIGN_BYTES) ? \
     ((size) + ALIGN_BYTES - ((size) % ALIGN_BYTES)): (size))
 /*---------------------------------------------------------------------------*/
@@ -70,11 +70,11 @@ typedef struct {
  *                  management
  */
 typedef struct {
-    free_block      pool[TM_POOL_BLOCKS];           //!< Actual memory pool (very large)
-    unsigned int    filled[TM_MAX_BIT_INDEXES];     //!< bit array of filled pointers (only used, not freed)
-    unsigned int    points[TM_MAX_BIT_INDEXES];     //!< bit array of used pointers (both used and freed)
+    free_block      pool[POOL_BLOCKS];           //!< Actual memory pool (very large)
+    unsigned int    filled[MAX_BIT_INDEXES];     //!< bit array of filled pointers (only used, not freed)
+    unsigned int    points[MAX_BIT_INDEXES];     //!< bit array of used pointers (both used and freed)
     poolptr         pointers[TM_MAX_POOL_PTRS];     //!< This is the index lookup location
-    tm_index_t      freed[TM_FREED_BINS];           //!< binned storage of all freed indexes
+    tm_index_t      freed[FREED_BINS];           //!< binned storage of all freed indexes
     tm_blocks_t     filled_blocks;                //!< total amount of data allocated
     tm_blocks_t     freed_blocks;                 //!< total amount of data freed
     tm_index_t      ptrs_filled;                    //!< total amount of pointers allocated
@@ -107,7 +107,7 @@ void index_extend(const tm_index_t index, const tm_blocks_t blocks, const bool f
 /**
  * \brief           Access Pool Characteristics
  */
-#define BLOCKS_LEFT                 (TM_POOL_BLOCKS - tm_pool.filled_blocks)
+#define BLOCKS_LEFT                 (POOL_BLOCKS - tm_pool.filled_blocks)
 #define PTRS_LEFT                   (TM_MAX_POOL_PTRS - (tm_pool.ptrs_filled + tm_pool.ptrs_filled))
 #define HEAP_LEFT                   (TM_POOL_SIZE - HEAP)
 #define LOCATION(index)             (tm_pool.pointers[index].loc)
@@ -257,7 +257,7 @@ tm_index_t      find_index(){
     unsigned int bit;
     if(!PTRS_LEFT) return 0;
     while(1){
-        for(; tm_pool.find_index < TM_MAX_BIT_INDEXES; tm_pool.find_index++){
+        for(; tm_pool.find_index < MAX_BIT_INDEXES; tm_pool.find_index++){
             if(tm_pool.points[tm_pool.find_index] != MAXUINT){
                 // there is an empty value
                 bit = 1 << tm_pool.find_index_bit;
@@ -328,7 +328,7 @@ tm_index_t      freed_get(const tm_blocks_t blocks){
     uint8_t bin;
     bin = freed_bin(blocks);
     tm_index_t index;
-    for(; bin<TM_FREED_BINS; bin++){
+    for(; bin<FREED_BINS; bin++){
         if(tm_pool.freed[bin]){
             index = tm_pool.freed[bin];
             assert(!FILLED(index));
@@ -478,7 +478,7 @@ tm_index_t      freed_count_print(tm_size_t *size, bool pnt){
     tm_size_t size_get;
     tm_index_t count = 0;
     *size = 0;
-    for(bin=0; bin<TM_FREED_BINS; bin++){
+    for(bin=0; bin<FREED_BINS; bin++){
         count += freed_count_bin(bin, &size_get, pnt);
         *size += size_get;
     }
@@ -510,7 +510,7 @@ tm_index_t      freed_full_print(bool full){
     tm_size_t size = 0, size_get;
     tm_index_t count = 0, count_get;
     printf("## Freed Bins:\n");
-    for(bin=0; bin<TM_FREED_BINS; bin++){
+    for(bin=0; bin<FREED_BINS; bin++){
         count_get = freed_count_bin(bin, &size_get, full);
         if(count_get) printf("    bin %4u: size=%-8u count=%-8u\n", bin, size_get, count_get);
         count += count_get;
@@ -582,7 +582,7 @@ char *test_tm_pool_new(){
 
     mu_assert(tm_pool.filled[0] == 1);
     mu_assert(tm_pool.points[0] == 1);
-    for(i=1; i<TM_MAX_BIT_INDEXES; i++){
+    for(i=1; i<MAX_BIT_INDEXES; i++){
         mu_assert(tm_pool.filled[i] == 0);
         mu_assert(tm_pool.points[i] == 0);
     }
@@ -592,7 +592,7 @@ char *test_tm_pool_new(){
         mu_assert(tm_pool.pointers[i].next == 0);
     }
 
-    for(i=0; i<TM_FREED_BINS; i++){
+    for(i=0; i<FREED_BINS; i++){
         mu_assert(tm_pool.freed[i] == 0);
     }
     mu_assert(freed_count(&size) == 0);
