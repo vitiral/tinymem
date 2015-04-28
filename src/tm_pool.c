@@ -17,11 +17,11 @@
 #define INTBITS                 (sizeof(int) * 8)
 
 #define TM_FREED_BINS           (12)
-#define TM_ALIGN_BYTES          sizeof(free_block)
-#define TM_ALIGN(size)          (((size) % TM_ALIGN_BYTES) ? \
-    ((size) + TM_ALIGN_BYTES - ((size) % TM_ALIGN_BYTES)): (size))
-#define ALIGN_BLOCKS(size)   TM_CEILING(size, TM_ALIGN_BYTES)
 
+#define ALIGN_BYTES          sizeof(free_block)
+#define ALIGN_BLOCKS(size)   TM_CEILING(size, ALIGN_BYTES)
+#define ALIGN(size)          (((size) % ALIGN_BYTES) ? \
+    ((size) + ALIGN_BYTES - ((size) % ALIGN_BYTES)): (size))
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           poolptr is used by Pool to track memory location and size
@@ -148,7 +148,7 @@ void index_extend(const tm_index_t index, const tm_blocks_t blocks, const bool f
 /*      Global Functions                                                     */
 
 inline tm_size_t tm_sizeof(const tm_index_t index){
-    return BLOCKS(index) * TM_ALIGN_BYTES;
+    return BLOCKS(index) * ALIGN_BYTES;
 }
 
 
@@ -217,7 +217,7 @@ tm_index_t      tm_realloc(tm_index_t index, tm_size_t size){
         tm_debug("    blocks=%u", BLOCKS(index));
         return index;
     } else{  // grow data
-        new_index = tm_alloc(size * TM_ALIGN_BYTES);
+        new_index = tm_alloc(size * ALIGN_BYTES);
         if(!new_index) return 0;
         tm_memmove(new_index, index);
         tm_free(index);
@@ -483,8 +483,8 @@ tm_index_t      freed_count_print(tm_size_t *size, bool pnt){
         *size += size_get;
     }
     assert(count==tm_pool.ptrs_freed);
-    tm_debug("%u==%u", *size, tm_pool.freed_blocks * TM_ALIGN_BYTES);
-    assert(*size==tm_pool.freed_blocks * TM_ALIGN_BYTES);
+    tm_debug("%u==%u", *size, tm_pool.freed_blocks * ALIGN_BYTES);
+    assert(*size==tm_pool.freed_blocks * ALIGN_BYTES);
     return count;
 }
 
@@ -652,12 +652,12 @@ char *test_tm_free_basic(){
         mu_assert(indexes[i]);
         filled_ptrs++;
         filled_blocks += ALIGN_BLOCKS(i+1);
-        mu_assert(tm_sizeof(indexes[i]) == TM_ALIGN(i+1));
+        mu_assert(tm_sizeof(indexes[i]) == ALIGN(i+1));
         mu_assert(filled_ptrs == tm_pool.ptrs_filled);
         mu_assert(filled_blocks == tm_pool.filled_blocks);
         mu_assert(freed_isvalid());
     }
-    for(i=0; i<100; i++) mu_assert(tm_sizeof(indexes[i]) == TM_ALIGN(i+1));
+    for(i=0; i<100; i++) mu_assert(tm_sizeof(indexes[i]) == ALIGN(i+1));
 
     heap = filled_blocks;
     mu_assert(HEAP == heap);
@@ -674,7 +674,6 @@ char *test_tm_free_basic(){
     return NULL;
 }
 
-# if 0
 char *test_tm_pool_realloc(){
     tm_index_t index, prev_index, other_index, index2;
     uint8_t i, n;
@@ -682,11 +681,14 @@ char *test_tm_pool_realloc(){
     uint16_t used_ptrs = 1;
     tm_size_t size;
 
+    tm_reset();
+
     // allocate data
     tm_debug("allocate");
     index = talloc(40);
     mu_assert(index);
     used+=ALIGN_BLOCKS(40); used_ptrs++;
+    tm_debug("%u==%u", used, tm_pool.filled_blocks);
     mu_assert(used == tm_pool.filled_blocks);
     mu_assert(used_ptrs == tm_pool.ptrs_filled);
     mu_assert(freed_isvalid());
@@ -729,4 +731,3 @@ char *test_tm_pool_realloc(){
 
     return NULL;
 }
-#endif
