@@ -1,110 +1,251 @@
 #include "tm_pool.h"
 
+//#if (TM_POOL_SIZE % sizeof(free_block))
+//#error "Invalid pool size, must be divisible by free_block"
+//#endif
+
+//#if (TM_MAX_POOL_PTRS % (8 * sizeof(int)))
+//#error "Invalid pool ptrs size, must be divisible by int"
+//#endif
+
+
+#define TM_CEILING(x, y)           (((x) % (y)) ? (x)/(y) + 1 : (x)/(y))
+
+#define TM_POOL_BLOCKS          (TM_POOL_SIZE / sizeof(free_block))
+#define TM_MAX_BIT_INDEXES      (TM_MAX_POOL_PTRS / (8 * sizeof(int)))
+#define MAXUINT                 ((unsigned int) 0xFFFFFFFFFFFFFFFF)
+#define INTBITS                 (sizeof(int) * 8)
+
+#define TM_FREED_BINS           (12)
+#define TM_ALIGN_BYTES          sizeof(free_block)
+#define TM_ALIGN(size)          (((size) % TM_ALIGN_BYTES) ? \
+    ((size) + TM_ALIGN_BYTES - ((size) % TM_ALIGN_BYTES)): (size))
+#define ALIGN_BLOCKS(size)   TM_CEILING(size, TM_ALIGN_BYTES)
 
 /*---------------------------------------------------------------------------*/
-/*      Local Declarations                                                   */
-tm_index_t      Pool_find_index(Pool *pool);
+/**
+ * \brief           poolptr is used by Pool to track memory location and size
+ */
+// TODO: packed!
+typedef struct {
+    tm_blocks_t loc;
+    tm_index_t next;
+} poolptr;
+
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           free_block is stored INSIDE of freed memory as a linked list
+ *                  of all freed data
+ */
+// TODO: packed!
+typedef struct {
+    tm_index_t prev;
+    tm_index_t next;
+} free_block;
+
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           Internal use only. Declares Pool with as many initial
+ *                  values as possible
+ */
+#define tm_init()  ((Pool) {                                  \
+    .filled = {1},                      /*NULL is taken*/       \
+    .points = {1},                      /*NULL is taken*/       \
+    .pointers = {{0, 0}},               /*heap = 0*/            \
+    .freed = {0},                                               \
+    .filled_blocks = {0},                                       \
+    .freed_blocks = {0},                                        \
+    .ptrs_filled = 1,                    /*NULL is "filled"*/   \
+    .ptrs_freed = 0,                                            \
+    .find_index = 0,                                            \
+    .last_index = 0,                                            \
+    .status = 0,                                                \
+    .find_index_bit = 1,                /*index 0 is invalid*/  \
+})
+
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           Pool object to track all memory usage
+ *                  This is the main object used by tinymem to do memory
+ *                  management
+ */
+typedef struct {
+    free_block      pool[TM_POOL_BLOCKS];           //!< Actual memory pool (very large)
+    unsigned int    filled[TM_MAX_BIT_INDEXES];     //!< bit array of filled pointers (only used, not freed)
+    unsigned int    points[TM_MAX_BIT_INDEXES];     //!< bit array of used pointers (both used and freed)
+    poolptr         pointers[TM_MAX_POOL_PTRS];     //!< This is the index lookup location
+    tm_index_t      freed[TM_FREED_BINS];           //!< binned storage of all freed indexes
+    tm_blocks_t     filled_blocks;                //!< total amount of data allocated
+    tm_blocks_t     freed_blocks;                 //!< total amount of data freed
+    tm_index_t      ptrs_filled;                    //!< total amount of pointers allocated
+    tm_index_t      ptrs_freed;                     //!< total amount of pointers freed
+    tm_index_t      find_index;                     //!< speed up find index
+    tm_index_t      last_index;                     //!< required to allocate off heap
+    uint8_t         status;                         //!< status byte. Access with Pool_status macros
+    uint8_t         find_index_bit;                 //!< speed up find index
+} Pool;
+
+Pool tm_pool = tm_init();
+
+
+/*---------------------------------------------------------------------------*/
+/*      Local Functions                                                      */
+
+tm_index_t      find_index();
 uint8_t         freed_bin(const tm_blocks_t size);
-inline void     Pool_freed_remove(Pool *pool, const tm_index_t index);
-inline void     Pool_freed_insert(Pool *pool, const tm_index_t index);
-tm_index_t      Pool_freed_get(Pool *pool, const tm_blocks_t size);
+inline void     freed_remove(const tm_index_t index);
+inline void     freed_insert(const tm_index_t index);
+tm_index_t      freed_get(const tm_blocks_t size);
 
-void Pool_index_join(Pool *pool, const tm_index_t index, const tm_index_t with_index);
-bool Pool_index_split(Pool *pool, const tm_index_t index, const tm_blocks_t blocks);
-void Pool_index_remove(Pool *pool, const tm_index_t index, const tm_index_t prev_index);
-void Pool_index_extend(Pool *pool, const tm_index_t index, const tm_blocks_t blocks, const bool filled);
-#define Pool_free_p(pool, index)  ((free_block *)Pool_void_p(pool, index))
+void index_join(const tm_index_t index, const tm_index_t with_index);
+bool index_split(const tm_index_t index, const tm_blocks_t blocks);
+void index_remove(const tm_index_t index, const tm_index_t prev_index);
+void index_extend(const tm_index_t index, const tm_blocks_t blocks, const bool filled);
+#define free_p(index)  ((free_block *)tm_void_p(index))
 
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           Access Pool Characteristics
+ */
+#define BLOCKS_LEFT                 (TM_POOL_BLOCKS - tm_pool.filled_blocks)
+#define PTRS_LEFT                   (TM_MAX_POOL_PTRS - (tm_pool.ptrs_filled + tm_pool.ptrs_filled))
+#define HEAP_LEFT                   (TM_POOL_SIZE - HEAP)
+#define LOCATION(index)             (tm_pool.pointers[index].loc)
+#define HEAP                        (tm_pool.pointers[0].loc)
+#define NEXT(index)                 (tm_pool.pointers[index].next)
+#define LOC_VOID(loc)               ((void*)tm_pool.pool + (loc))
+#define BLOCKS(index)               (LOCATION(tm_pool.pointers[index].next) - \
+                                        LOCATION(index))
+
+/**
+ *                  FILLED* does operations on Pool's `filled` array
+ *                  POINTS* does operations on Pool's `points` array
+ */
+#define BITARRAY_INDEX(index)        (index / 8)
+#define BITARRAY_BIT(index)          (1 << (index % 8))
+#define FILLED(index)               (tm_pool.filled[BITARRAY_INDEX(index)] &   BITARRAY_BIT(index))
+#define FILLED_SET(index)           (tm_pool.filled[BITARRAY_INDEX(index)] |=  BITARRAY_BIT(index))
+#define FILLED_CLEAR(index)         (tm_pool.filled[BITARRAY_INDEX(index)] &= ~BITARRAY_BIT(index))
+#define POINTS(index)               (tm_pool.points[BITARRAY_INDEX(index)] &   BITARRAY_BIT(index))
+#define POINTS_SET(index)           (tm_pool.points[BITARRAY_INDEX(index)] |=  BITARRAY_BIT(index))
+#define POINTS_CLEAR(index)         (tm_pool.points[BITARRAY_INDEX(index)] &= ~BITARRAY_BIT(index))
+
+#define tm_memmove(index_to, index_from)  memmove(                \
+            tm_void_p(index_to),                                    \
+            tm_void_p(index_from),                                  \
+            tm_sizeof(index_from)                                   \
+        )
+
+/**
+ * \brief           Get, set or clear the status bit (0 or 1) of name
+ * \return uint8_t  status bit
+ */
+#define STATUS(name)                ((tm_pool.status) & (name))
+#define STATUS_SET(name)            (tm_pool.status |= (name))
+#define STATUS_CLEAR(name)          (tm_pool.status &= ~(name))
 
 /*---------------------------------------------------------------------------*/
 /*      Global Functions                                                     */
-void *          Pool_void_p(const Pool *pool, const tm_index_t index){
-    // Note: index 0 has location == heap (it is where Pool_heap is stored)
-    if(Pool_loc(pool, index) >= Pool_heap(pool)) return NULL;
-    return pool->pool + Pool_loc(pool, index);
+
+inline tm_size_t tm_sizeof(const tm_index_t index){
+    return BLOCKS(index) * TM_ALIGN_BYTES;
 }
 
+
+inline void tm_reset(){
+    tm_pool = tm_init();
+}
+
+
+void *          tm_void_p(const tm_index_t index){
+    // Note: index 0 has location == heap (it is where Pool_heap is stored)
+    if(LOCATION(index) >= HEAP) return NULL;
+    return tm_pool.pool + LOCATION(index);
+}
+
+
 /*---------------------------------------------------------------------------*/
-tm_index_t      Pool_alloc(Pool *pool, tm_size_t size){
+tm_index_t      tm_alloc(tm_size_t size){
     tm_index_t index;
-    size = TM_ALIGN_BLOCKS(size);
-    if(Pool_available_blocks(pool) < size) return 0;
-    index = Pool_freed_get(pool, size);
+    size = ALIGN_BLOCKS(size);
+    if(BLOCKS_LEFT < size) return 0;
+    index = freed_get(size);
     if(index){
-        if(Pool_blocks(pool, index) != size) Pool_index_split(pool, index, size);
+        if(BLOCKS(index) != size) index_split(index, size);
         return index;
     }
-    if(Pool_heap_left(pool) < size){
-        Pool_status_set(pool, TM_DEFRAG_FAST);  // need less fragmentation
+    if(HEAP_LEFT < size){
+        STATUS(TM_DEFRAG_FAST);  // need less fragmentation
         return 0;
     }
-    index = Pool_find_index(pool);
+    index = find_index();
     if(!index){
-        Pool_status_set(pool, TM_DEFRAG_FAST);  // need more indexes
+        STATUS(TM_DEFRAG_FAST);  // need more indexes
         return 0;
     }
-    Pool_index_extend(pool, index, size, true);  // extend index onto heap
+    index_extend(index, size, true);  // extend index onto heap
     return index;
 }
 
+
 /*---------------------------------------------------------------------------*/
-tm_index_t      Pool_realloc(Pool *pool, tm_index_t index, tm_size_t size){
+tm_index_t      tm_realloc(tm_index_t index, tm_size_t size){
     tm_index_t new_index;
     tm_blocks_t prev_size;
-    size = TM_ALIGN_BLOCKS(size);
-    tm_debug("used start=%u", pool->filled_blocks);
+    size = ALIGN_BLOCKS(size);
+    tm_debug("used start=%u", tm_pool.filled_blocks);
 
-    if(!index) return Pool_alloc(pool, size);
-    if(!Pool_filled_bool(pool, index)) return 0;
+    if(!index) return tm_alloc(size);
+    if(!FILLED(index)) return 0;
     if(!size){
-        Pool_free(pool, index);
+        tm_free(index);
         return 0;
     }
-    new_index = Pool_next(pool, index);
-    if(!Pool_filled_bool(pool, new_index)){
+    new_index = NEXT(index);
+    if(!FILLED(new_index)){
         // If next index is free, always join it first
-        Pool_index_join(pool, index, new_index);
+        index_join(index, new_index);
     }
-    tm_debug("used combined=%u", pool->filled_blocks);
-    tm_debug("    blocks=%u", Pool_blocks(pool, index));
-    prev_size = Pool_blocks(pool, index);
-    if(size == Pool_blocks(pool, index)) return index;
+    tm_debug("used combined=%u", tm_pool.filled_blocks);
+    tm_debug("    blocks=%u", BLOCKS(index));
+    prev_size = BLOCKS(index);
+    if(size == BLOCKS(index)) return index;
     if(size < prev_size){  // shrink data
         tm_debug("splitting");
-        if(!Pool_index_split(pool, index, size)) return 0;
-        tm_debug("used=%u", pool->filled_blocks);
-        tm_debug("    blocks=%u", Pool_blocks(pool, index));
+        if(!index_split(index, size)) return 0;
+        tm_debug("used=%u", tm_pool.filled_blocks);
+        tm_debug("    blocks=%u", BLOCKS(index));
         return index;
     } else{  // grow data
-        new_index = Pool_alloc(pool, size * TM_ALIGN_BYTES);
+        new_index = tm_alloc(size * TM_ALIGN_BYTES);
         if(!new_index) return 0;
-        Pool_memmove(pool, new_index, index);
-        Pool_free(pool, index);
+        tm_memmove(new_index, index);
+        tm_free(index);
         return new_index;
     }
 }
 
 /*---------------------------------------------------------------------------*/
-void            Pool_free(Pool *pool, const tm_index_t index){
+void            tm_free(const tm_index_t index){
     uint8_t bin;
-    if(Pool_loc(pool, index) >= Pool_heap(pool)) return;
-    if(index >= TM_MAX_POOL_PTRS || !Pool_filled_bool(pool, index)) return;
-    Pool_filled_clear(pool, index);
-    pool->filled_blocks -= Pool_blocks(pool, index);
-    pool->freed_blocks += Pool_blocks(pool, index);
-    pool->ptrs_filled--;
-    pool->ptrs_freed++;
+    if(LOCATION(index) >= HEAP) return;
+    if(index >= TM_MAX_POOL_PTRS || !FILLED(index)) return;
+    FILLED_CLEAR(index);
+    tm_pool.filled_blocks -= BLOCKS(index);
+    tm_pool.freed_blocks += BLOCKS(index);
+    tm_pool.ptrs_filled--;
+    tm_pool.ptrs_freed++;
 
     // Note: index 0 == filled
-    tm_debug("Freeing index=%u, next=%u, size=%u", index, Pool_next(pool, index), Pool_sizeof(pool, index));
-    if(!Pool_filled_bool(pool, Pool_next(pool, index))){
+    tm_debug("Freeing index=%u, next=%u, size=%u", index, NEXT(index), tm_sizeof(index));
+    if(!FILLED(NEXT(index))){
         tm_debug("Next is free");
         // The next index is also free, remove from free bin and join
-        Pool_freed_remove(pool, Pool_next(pool, index));
-        pool->ptrs_freed--;
-        Pool_next(pool, index) = Pool_next(pool, Pool_next(pool, index));
+        freed_remove(NEXT(index));
+        tm_pool.ptrs_freed--;
+        NEXT(index) = NEXT(NEXT(index));
     }
-    Pool_freed_insert(pool, index);
+    freed_insert(index);
 }
 
 
@@ -112,26 +253,26 @@ void            Pool_free(Pool *pool, const tm_index_t index){
 /*      Local Functions                                                      */
 
 /*---------------------------------------------------------------------------*/
-tm_index_t      Pool_find_index(Pool *pool){
+tm_index_t      find_index(){
     unsigned int bit;
-    if(!Pool_pointers_left(pool)) return 0;
+    if(!PTRS_LEFT) return 0;
     while(1){
-        for(; pool->find_index < TM_MAX_BIT_INDEXES; pool->find_index++){
-            if(pool->points[pool->find_index] != MAXUINT){
+        for(; tm_pool.find_index < TM_MAX_BIT_INDEXES; tm_pool.find_index++){
+            if(tm_pool.points[tm_pool.find_index] != MAXUINT){
                 // there is an empty value
-                bit = 1 << pool->find_index_bit;
-                for(; pool->find_index_bit < INTBITS; pool->find_index_bit++){
-                    if(!(pool->points[pool->find_index_bit] & bit)){
-                        pool->find_index_bit++;
-                        return pool->find_index * INTBITS + (pool->find_index_bit - 1);
+                bit = 1 << tm_pool.find_index_bit;
+                for(; tm_pool.find_index_bit < INTBITS; tm_pool.find_index_bit++){
+                    if(!(tm_pool.points[tm_pool.find_index_bit] & bit)){
+                        tm_pool.find_index_bit++;
+                        return tm_pool.find_index * INTBITS + (tm_pool.find_index_bit - 1);
                     }
                     bit = bit << 1;
                 }
             }
-            pool->find_index_bit = 0;
+            tm_pool.find_index_bit = 0;
         }
-        pool->find_index = 0;
-        pool->find_index_bit = 1;   // index 0 is invalid
+        tm_pool.find_index = 0;
+        tm_pool.find_index_bit = 1;   // index 0 is invalid
     }
 }
 
@@ -159,44 +300,44 @@ uint8_t         freed_bin(const tm_blocks_t blocks){
 }
 
 
-inline void     Pool_freed_remove(Pool *pool, const tm_index_t index){
-    free_block *free = Pool_free_p(pool, index);
+inline void     freed_remove(const tm_index_t index){
+    free_block *free = free_p(index);
     assert(free);
     if(free->prev){
-        Pool_free_p(pool, free->prev)->next = free->next;
+        free_p(free->prev)->next = free->next;
     } else{ // free is first element in the array
-        pool->freed[freed_bin(Pool_blocks(pool, index))] = free->next;
+        tm_pool.freed[freed_bin(BLOCKS(index))] = free->next;
     }
-    if(free->next) Pool_free_p(pool, free->next)->prev = free->prev;
+    if(free->next) free_p(free->next)->prev = free->prev;
 }
 
 
-inline void     Pool_freed_insert(Pool *pool, const tm_index_t index){
-    uint8_t bin = freed_bin(Pool_blocks(pool, index));
-    *Pool_free_p(pool, index) = (free_block){.next=pool->freed[bin], .prev=0};
-    if(pool->freed[bin]){
-        Pool_free_p(pool, pool->freed[bin])->prev = index;
+inline void     freed_insert(const tm_index_t index){
+    uint8_t bin = freed_bin(BLOCKS(index));
+    *free_p(index) = (free_block){.next=tm_pool.freed[bin], .prev=0};
+    if(tm_pool.freed[bin]){
+        free_p(tm_pool.freed[bin])->prev = index;
     }
-    pool->freed[bin] = index;
+    tm_pool.freed[bin] = index;
 }
 
 
-tm_index_t      Pool_freed_get(Pool *pool, const tm_blocks_t blocks){
+tm_index_t      freed_get(const tm_blocks_t blocks){
     // Get an index from the freed array of the specified size. The
     //      index settings are automatically set to filled
     uint8_t bin;
     bin = freed_bin(blocks);
     tm_index_t index;
     for(; bin<TM_FREED_BINS; bin++){
-        if(pool->freed[bin]){
-            index = pool->freed[bin];
-            assert(!Pool_filled_bool(pool, index));
-            Pool_freed_remove(pool, index);
-            pool->filled_blocks += Pool_blocks(pool, index);
-            pool->freed_blocks -= Pool_blocks(pool, index);
-            pool->ptrs_filled++;
-            pool->ptrs_freed--;
-            Pool_filled_set(pool, index);
+        if(tm_pool.freed[bin]){
+            index = tm_pool.freed[bin];
+            assert(!FILLED(index));
+            freed_remove(index);
+            tm_pool.filled_blocks += BLOCKS(index);
+            tm_pool.freed_blocks -= BLOCKS(index);
+            tm_pool.ptrs_filled++;
+            tm_pool.ptrs_freed--;
+            FILLED_SET(index);
             return index;
         }
     }
@@ -207,167 +348,170 @@ tm_index_t      Pool_freed_get(Pool *pool, const tm_blocks_t blocks){
 /*---------------------------------------------------------------------------*/
 /*          Index Operations (remove, join, etc)                             */
 
-void Pool_index_join(Pool *pool, const tm_index_t index, const tm_index_t with_index){
+void index_join(const tm_index_t index, const tm_index_t with_index){
     // join index with_index. with_index will be removed
     // TODO: this should join all the way up -- as many free indexes as it finds
-    assert(!Pool_filled_bool(pool, with_index));
-    if(Pool_filled_bool(pool, index)){
-        pool->filled_blocks += Pool_blocks(pool, with_index);
-        pool->freed_blocks -= Pool_blocks(pool, with_index);
+    assert(!FILLED(with_index));
+    if(FILLED(index)){
+        tm_pool.filled_blocks += BLOCKS(with_index);
+        tm_pool.freed_blocks -= BLOCKS(with_index);
     }
-    Pool_next(pool, index) = Pool_next(pool, with_index);
-    Pool_index_remove(pool, with_index, index);
-    pool->ptrs_freed--;
-    if(!Pool_filled_bool(pool, index)){ // rebin the index, as it has grown
-        Pool_freed_remove(pool, index);
-        Pool_freed_insert(pool, index);
+    NEXT(index) = NEXT(with_index);
+    index_remove(with_index, index);
+    tm_pool.ptrs_freed--;
+    if(!FILLED(index)){ // rebin the index, as it has grown
+        freed_remove(index);
+        freed_insert(index);
     }
 }
 
-bool Pool_index_split(Pool *pool, const tm_index_t index, const tm_blocks_t blocks){
+bool index_split(const tm_index_t index, const tm_blocks_t blocks){
     // split an index so the index becomes size blocks. Automatically creates a new freed
     //      index to store the new free data
     //      returns true on success, false on failure
-    assert(blocks < Pool_blocks(pool, index));
-    tm_index_t new_index = Pool_next(pool, index);
-    if(!Pool_filled_bool(pool, new_index)){
+    assert(blocks < BLOCKS(index));
+    tm_index_t new_index = NEXT(index);
+    if(!FILLED(new_index)){
         // If next index is free, always join it first. This also frees up new_index to
         // use however we want!
-        Pool_index_join(pool, index, new_index);
+        index_join(index, new_index);
     } else{
-        new_index = Pool_find_index(pool);
+        new_index = find_index();
         if(!new_index) return false;
     }
 
     // update new index for freed data
-    Pool_points_set(pool, new_index);
-    assert(!Pool_filled_bool(pool, new_index));
+    POINTS_SET(new_index);
+    assert(!FILLED(new_index));
 
-    if(Pool_filled_bool(pool, index)){
-        pool->freed_blocks += Pool_blocks(pool, index) - blocks;
-        pool->filled_blocks -= Pool_blocks(pool, index) - blocks;
+    if(FILLED(index)){
+        tm_pool.freed_blocks += BLOCKS(index) - blocks;
+        tm_pool.filled_blocks -= BLOCKS(index) - blocks;
     }
-    pool->ptrs_freed++;
-    pool->pointers[new_index] = (poolptr) {.loc = Pool_loc(pool, index) + blocks,
-                                           .next = Pool_next(pool, index)};
-    Pool_next(pool, index) = new_index;
+    tm_pool.ptrs_freed++;
+    tm_pool.pointers[new_index] = (poolptr) {.loc = LOCATION(index) + blocks,
+                                           .next = NEXT(index)};
+    NEXT(index) = new_index;
 
     // mark changes
-    Pool_freed_insert(pool, new_index);
-    if(pool->last_index == index) pool->last_index = new_index;
+    freed_insert(new_index);
+    if(tm_pool.last_index == index) tm_pool.last_index = new_index;
     return true;
 }
 
-void Pool_index_remove(Pool *pool, const tm_index_t index, const tm_index_t prev_index){
+void index_remove(const tm_index_t index, const tm_index_t prev_index){
     // Completely remove the index. Used for combining indexes and when defragging
     // from end (to combine heap)
-    if(!Pool_filled_bool(pool, index)){
-        Pool_freed_remove(pool, index);
-        pool->freed_blocks -= Pool_blocks(pool, index);
-        pool->ptrs_freed--;
+    if(!FILLED(index)){
+        freed_remove(index);
+        tm_pool.freed_blocks -= BLOCKS(index);
+        tm_pool.ptrs_freed--;
     } else{
-        pool->filled_blocks -= Pool_blocks(pool, index);
-        pool->ptrs_filled--;
+        tm_pool.filled_blocks -= BLOCKS(index);
+        tm_pool.ptrs_filled--;
     }
-    if(!Pool_next(pool, index)) { // this is the last index
-        assert(pool->last_index == index);
-        pool->last_index = prev_index;
-        Pool_next(pool, prev_index) = 0;
-        Pool_heap(pool) = Pool_loc(pool, index);
+    if(!NEXT(index)) { // this is the last index
+        assert(tm_pool.last_index == index);
+        tm_pool.last_index = prev_index;
+        NEXT(prev_index) = 0;
+        HEAP = LOCATION(index);
     }
     // TODO: if first index
-    Pool_filled_clear(pool, index);
-    Pool_points_clear(pool, index);
+    FILLED_CLEAR(index);
+    POINTS_CLEAR(index);
 }
 
-void Pool_index_extend(Pool *pool, const tm_index_t index, const tm_blocks_t blocks,
+void index_extend(const tm_index_t index, const tm_blocks_t blocks,
         const bool filled){
     // extend index onto the heap
-    Pool_points_set(pool, index);
-    pool->pointers[index] = (poolptr) {.loc = Pool_heap(pool), .next = 0};
-    Pool_heap(pool) += blocks;
-    if(pool->last_index) Pool_next(pool, pool->last_index) = index;
-    pool->last_index = index;
+    POINTS_SET(index);
+    tm_pool.pointers[index] = (poolptr) {.loc = HEAP, .next = 0};
+    HEAP += blocks;
+    if(tm_pool.last_index) NEXT(tm_pool.last_index) = index;
+    tm_pool.last_index = index;
     // TODO: if first
 
     if(filled){
-        Pool_filled_set(pool, index);
-        pool->filled_blocks += blocks;
-        pool->ptrs_filled++;
+        FILLED_SET(index);
+        tm_pool.filled_blocks += blocks;
+        tm_pool.ptrs_filled++;
     }
     else{
-        assert(!Pool_filled_bool(pool, index));
-        pool->freed_blocks += blocks;
-        pool->ptrs_freed++;
+        assert(!FILLED(index));
+        tm_pool.freed_blocks += blocks;
+        tm_pool.ptrs_freed++;
     }
 
 }
 
 /*---------------------------------------------------------------------------*/
 /*      For Debug and Test                                                   */
-tm_index_t      Pool_freed_count_bin(Pool *pool, uint8_t bin, tm_size_t *size, bool pnt){
+
+#define PRIME       (65599)
+
+tm_index_t      freed_count_bin(uint8_t bin, tm_size_t *size, bool pnt){
     // Get the number and the size of the items in bin
     tm_index_t prev_index;
-    tm_index_t index = pool->freed[bin];
+    tm_index_t index = tm_pool.freed[bin];
     tm_index_t count = 0;
     *size = 0;
     if(!index) return 0;
-    free_block *free = Pool_free_p(pool, index);
+    free_block *free = free_p(index);
     assert(free);
     assert(free->prev == 0);
     while(1){
-        assert(!Pool_filled_bool(pool, index));
+        assert(!FILLED(index));
         if(pnt) printf("        prev=%u, ind=%u, next=%u\n", free->prev, index, free->next);
-        *size += Pool_sizeof(pool, index);
+        *size += tm_sizeof(index);
         count++;
         prev_index = index;
         index = free->next;
         if(!free->next) return count;
-        free = Pool_free_p(pool, index);
+        free = free_p(index);
         assert(free);
         assert(free->prev == prev_index);
     }
 }
 
-tm_index_t      Pool_freed_count_print(Pool *pool, tm_size_t *size, bool pnt){
+tm_index_t      freed_count_print(tm_size_t *size, bool pnt){
     uint8_t bin;
     tm_size_t size_get;
     tm_index_t count = 0;
     *size = 0;
     for(bin=0; bin<TM_FREED_BINS; bin++){
-        count += Pool_freed_count_bin(pool, bin, &size_get, pnt);
+        count += freed_count_bin(bin, &size_get, pnt);
         *size += size_get;
     }
-    assert(count==pool->ptrs_freed);
-    tm_debug("%u==%u", *size, pool->freed_blocks * TM_ALIGN_BYTES);
-    assert(*size==pool->freed_blocks * TM_ALIGN_BYTES);
+    assert(count==tm_pool.ptrs_freed);
+    tm_debug("%u==%u", *size, tm_pool.freed_blocks * TM_ALIGN_BYTES);
+    assert(*size==tm_pool.freed_blocks * TM_ALIGN_BYTES);
     return count;
 }
 
-tm_index_t Pool_freed_count(Pool *pool, tm_size_t *size){
-    return Pool_freed_count_print(pool, size, false);
+tm_index_t freed_count(tm_size_t *size){
+    return freed_count_print(size, false);
 }
 
-bool            Pool_freed_isvalid(Pool *pool){
+bool            freed_isvalid(){
     tm_size_t size;
-    tm_index_t count = Pool_freed_count(pool, &size);
-    size = TM_ALIGN_BLOCKS(size);
-    if(!((count==pool->ptrs_freed) && (size==pool->freed_blocks))){
-        tm_debug("freed: %u==%u", count, pool->ptrs_freed);
-        tm_debug("size:  %u==%u", size, pool->freed_blocks);
+    tm_index_t count = freed_count(&size);
+    size = ALIGN_BLOCKS(size);
+    if(!((count==tm_pool.ptrs_freed) && (size==tm_pool.freed_blocks))){
+        tm_debug("freed: %u==%u", count, tm_pool.ptrs_freed);
+        tm_debug("size:  %u==%u", size, tm_pool.freed_blocks);
         return false;
     }
     return true;
 }
 
 
-tm_index_t      Pool_freed_full_print(Pool *pool, bool full){
+tm_index_t      freed_full_print(bool full){
     uint8_t bin;
     tm_size_t size = 0, size_get;
     tm_index_t count = 0, count_get;
     printf("## Freed Bins:\n");
     for(bin=0; bin<TM_FREED_BINS; bin++){
-        count_get = Pool_freed_count_bin(pool, bin, &size_get, full);
+        count_get = freed_count_bin(bin, &size_get, full);
         if(count_get) printf("    bin %4u: size=%-8u count=%-8u\n", bin, size_get, count_get);
         count += count_get;
         size += size_get;
@@ -376,7 +520,213 @@ tm_index_t      Pool_freed_full_print(Pool *pool, bool full){
 }
 
 
-tm_index_t      Pool_freed_print(Pool *pool){
-    Pool_freed_full_print(pool, false);
+tm_index_t      freed_print(){
+    freed_full_print(false);
 }
 
+void        fill_index(tm_index_t index){
+    uint32_t value = index * PRIME;
+    uint32_t *data = tm_uint32_p(index);
+    assert(data);
+    tm_blocks_t i;
+
+    if(FILLED(index)) data[0] = value;
+    for(i=1; i<BLOCKS(index); i++){
+        data[i] = value;
+    }
+}
+
+
+bool        check_index(tm_index_t index){
+    uint32_t value = index * PRIME;
+    uint32_t *data = tm_uint32_p(index);
+    assert(data);
+    tm_blocks_t i;
+
+    if(FILLED(index)){
+        if(data[0] != value) return false;
+    }
+    for(i=1; i<BLOCKS(index); i++){
+        if(data[i] != value) return false;
+    }
+    return true;
+}
+
+/*---------------------------------------------------------------------------*/
+/**         Test free and alloc (automatically fills data)                   */
+
+tm_index_t  talloc(tm_size_t size){
+    tm_index_t index = tm_alloc(size);
+    if(!index) return 0;
+    fill_index(index);
+    return index;
+}
+
+
+void        tfree(tm_index_t index){
+    tm_free(index);
+    fill_index(index);
+}
+
+/*---------------------------------------------------------------------------*/
+/*      Tests                                                                */
+#define mu_assert(test) if (!(test)) {assert(test); return "FAILED\n";}
+
+char *test_tm_pool_new(){
+    tm_index_t i;
+    tm_size_t size;
+    tm_reset();
+
+    mu_assert(HEAP == 0);
+    mu_assert(HEAP_LEFT == TM_POOL_SIZE);
+
+    mu_assert(tm_pool.filled[0] == 1);
+    mu_assert(tm_pool.points[0] == 1);
+    for(i=1; i<TM_MAX_BIT_INDEXES; i++){
+        mu_assert(tm_pool.filled[i] == 0);
+        mu_assert(tm_pool.points[i] == 0);
+    }
+
+    for(i=0; i<TM_MAX_POOL_PTRS; i++){
+        mu_assert(tm_pool.pointers[i].loc == 0);
+        mu_assert(tm_pool.pointers[i].next == 0);
+    }
+
+    for(i=0; i<TM_FREED_BINS; i++){
+        mu_assert(tm_pool.freed[i] == 0);
+    }
+    mu_assert(freed_count(&size) == 0);
+    mu_assert(size == 0);
+    return NULL;
+}
+
+char *test_tm_pool_alloc(){
+    tm_size_t size;
+    uint8_t i, n;
+    uint16_t heap = 0, ptrs=1;
+    tm_reset();
+
+    mu_assert(freed_count(&size) == 0);
+    mu_assert(size == 0);
+
+    tm_index_t index;
+    tm_index_t indexes[10];
+
+    index = talloc(sizeof(uint32_t));
+    mu_assert(index == 1);
+    mu_assert(tm_pool.pointers[1].loc == heap);
+    heap += ALIGN_BLOCKS(sizeof(uint32_t)); ptrs++;
+    mu_assert(HEAP == heap);
+    mu_assert(tm_pool.ptrs_filled == ptrs);
+
+    mu_assert(check_index(index));
+    for(i=0; i<10; i++){
+        indexes[i] = talloc(8);
+        mu_assert(indexes[i]);
+        mu_assert(tm_pool.pointers[i + 2].loc == heap);
+        heap += ALIGN_BLOCKS(8); ptrs++;
+        mu_assert(HEAP == heap);
+        mu_assert(tm_pool.ptrs_filled == ptrs);
+        mu_assert(i + 2 == indexes[i]);
+    }
+    mu_assert(check_index(index));
+    for(i=0; i<10; i++) mu_assert(check_index(indexes[i]));
+    return NULL;
+}
+
+char *test_tm_free_basic(){
+    int8_t i, j;
+    tm_index_t filled_ptrs;
+    tm_index_t filled_blocks;
+    tm_size_t heap;
+    tm_size_t temp;
+    tm_index_t indexes[100];
+    tm_index_t index;
+
+    // allocate a bunch of memory, then free chunks of it.
+    // Then allocate it again, making sure the heap doesn't change
+    filled_ptrs = tm_pool.ptrs_filled;
+    filled_blocks = tm_pool.filled_blocks;
+    for(i=0; i<100; i++){
+        indexes[i] = talloc(i+1);
+        mu_assert(indexes[i]);
+        filled_ptrs++;
+        filled_blocks += ALIGN_BLOCKS(i+1);
+        mu_assert(tm_sizeof(indexes[i]) == TM_ALIGN(i+1));
+        mu_assert(filled_ptrs == tm_pool.ptrs_filled);
+        mu_assert(filled_blocks == tm_pool.filled_blocks);
+        mu_assert(freed_isvalid());
+    }
+    for(i=0; i<100; i++) mu_assert(tm_sizeof(indexes[i]) == TM_ALIGN(i+1));
+
+    heap = filled_blocks;
+    mu_assert(HEAP == heap);
+    for(i=0; i<100; i++) mu_assert(check_index(indexes[i]));
+    for(i=2; i<100; i+=2){ // free the even ones
+        tm_free(indexes[i]);
+        filled_ptrs--;
+        filled_blocks -= ALIGN_BLOCKS(i+1);
+        mu_assert(filled_ptrs == tm_pool.ptrs_filled);
+        mu_assert(filled_blocks == tm_pool.filled_blocks);
+        mu_assert(freed_isvalid());
+    }
+    for(i=0; i<100; i++) mu_assert(check_index(indexes[i]));
+    return NULL;
+}
+
+# if 0
+char *test_tm_pool_realloc(){
+    tm_index_t index, prev_index, other_index, index2;
+    uint8_t i, n;
+    uint16_t used = 0;
+    uint16_t used_ptrs = 1;
+    tm_size_t size;
+
+    // allocate data
+    tm_debug("allocate");
+    index = talloc(40);
+    mu_assert(index);
+    used+=ALIGN_BLOCKS(40); used_ptrs++;
+    mu_assert(used == tm_pool.filled_blocks);
+    mu_assert(used_ptrs == tm_pool.ptrs_filled);
+    mu_assert(freed_isvalid());
+
+    // shrink data
+    tm_debug("shrink");
+    prev_index = index;
+    index = tm_realloc(index, 32);
+    mu_assert(index == prev_index);
+    used-=ALIGN_BLOCKS(8);  // more free memory
+    mu_assert(tm_sizeof(index) == 32);
+    tm_debug("%u==%u", used, tm_pool.filled_blocks);
+    mu_assert(used == tm_pool.filled_blocks);
+    mu_assert(used_ptrs == tm_pool.ptrs_filled);
+    mu_assert(1 == tm_pool.ptrs_freed);
+    mu_assert(1 == freed_count(&size));
+    mu_assert(8 == size);
+    mu_assert(ALIGN_BLOCKS(8) == tm_pool.freed_blocks);
+    mu_assert(freed_isvalid());
+
+    // grow data
+    tm_debug("grow");
+    index2 = tm_alloc(4);       // force heap allocation
+    used += ALIGN_BLOCKS(4); used_ptrs++;
+    mu_assert(used == tm_pool.filled_blocks);
+    mu_assert(used_ptrs == tm_pool.ptrs_filled);
+    mu_assert(tm_sizeof(index) == 32);
+
+    prev_index = index;
+    tm_debug("checking alloc");
+
+    index = tm_realloc(index, 60);
+    mu_assert(index);
+    mu_assert(index != prev_index);
+    used += ALIGN_BLOCKS(60) - ALIGN_BLOCKS(32);
+    tm_debug("%u==%u", used, tm_pool.filled_blocks);
+    mu_assert(used == tm_pool.filled_blocks);
+    mu_assert(used_ptrs == tm_pool.ptrs_filled);
+    mu_assert(freed_isvalid());
+
+    return NULL;
+}
+#endif
