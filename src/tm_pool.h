@@ -113,16 +113,6 @@ typedef struct {
 #define Pool_points_set(p, index)    ((p)->points[BITARRAY_INDEX(index)] |=  BITARRAY_BIT(index))
 #define Pool_points_clear(p, index)  ((p)->points[BITARRAY_INDEX(index)] &= ~BITARRAY_BIT(index))
 
-#define Pool_bytes_free(p, size)   do{                  \
-        (p)->freed_blocks += size;                       \
-        (p)->filled_blocks -= size;                      \
-    }while(0)
-
-#define Pool_bytes_fill(p, size)   do{                  \
-        (p)->freed_blocks -= size;                       \
-        (p)->filled_blocks += size;                      \
-    }while(0)
-
 #define Pool_memmove(pool, index_to, index_from)  memmove(              \
             Pool_void_p(pool, index_to),                                  \
             Pool_void_p(pool, index_from),                                \

@@ -139,6 +139,7 @@ char *test_tm_pool_realloc(){
     index = Pool_realloc(pool, index, 32);
     mu_assert(index == prev_index);
     used-=TM_ALIGN_BLOCKS(8);  // more free memory
+    mu_assert(Pool_sizeof(pool, index) == 32);
     mu_assert(used == pool->filled_blocks);
     mu_assert(used_ptrs == pool->ptrs_filled);
     mu_assert(1 == pool->ptrs_freed);
@@ -148,11 +149,16 @@ char *test_tm_pool_realloc(){
 
     // grow data
     index2 = Pool_alloc(pool, 4);       // force heap allocation
+    used += TM_ALIGN_BLOCKS(4); used_ptrs++;
+    mu_assert(used == pool->filled_blocks);
+    mu_assert(used_ptrs == pool->ptrs_filled);
+    mu_assert(Pool_sizeof(pool, index) == 32);
+
     prev_index = index;
     index = Pool_realloc(pool, index, 60);
     mu_assert(index);
     mu_assert(index != prev_index);
-    used += TM_ALIGN_BLOCKS(60) - TM_ALIGN_BLOCKS(32) + TM_ALIGN_BLOCKS(4);
+    used += TM_ALIGN_BLOCKS(60) - TM_ALIGN_BLOCKS(32);
     tm_debug("%u==%u", used, pool->filled_blocks);
     mu_assert(used == pool->filled_blocks);
     mu_assert(used_ptrs == pool->ptrs_filled);
