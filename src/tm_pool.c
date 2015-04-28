@@ -634,3 +634,99 @@ char *test_tm_pool_alloc(){
     return NULL;
 }
 
+char *test_tm_free_basic(){
+    int8_t i, j;
+    tm_index_t filled_ptrs;
+    tm_index_t filled_blocks;
+    tm_size_t heap;
+    tm_size_t temp;
+    tm_index_t indexes[100];
+    tm_index_t index;
+
+    // allocate a bunch of memory, then free chunks of it.
+    // Then allocate it again, making sure the heap doesn't change
+    filled_ptrs = tm_pool.ptrs_filled;
+    filled_blocks = tm_pool.filled_blocks;
+    for(i=0; i<100; i++){
+        indexes[i] = talloc(i+1);
+        mu_assert(indexes[i]);
+        filled_ptrs++;
+        filled_blocks += ALIGN_BLOCKS(i+1);
+        mu_assert(tm_sizeof(indexes[i]) == TM_ALIGN(i+1));
+        mu_assert(filled_ptrs == tm_pool.ptrs_filled);
+        mu_assert(filled_blocks == tm_pool.filled_blocks);
+        mu_assert(freed_isvalid());
+    }
+    for(i=0; i<100; i++) mu_assert(tm_sizeof(indexes[i]) == TM_ALIGN(i+1));
+
+    heap = filled_blocks;
+    mu_assert(HEAP == heap);
+    for(i=0; i<100; i++) mu_assert(check_index(indexes[i]));
+    for(i=2; i<100; i+=2){ // free the even ones
+        tm_free(indexes[i]);
+        filled_ptrs--;
+        filled_blocks -= ALIGN_BLOCKS(i+1);
+        mu_assert(filled_ptrs == tm_pool.ptrs_filled);
+        mu_assert(filled_blocks == tm_pool.filled_blocks);
+        mu_assert(freed_isvalid());
+    }
+    for(i=0; i<100; i++) mu_assert(check_index(indexes[i]));
+    return NULL;
+}
+
+# if 0
+char *test_tm_pool_realloc(){
+    tm_index_t index, prev_index, other_index, index2;
+    uint8_t i, n;
+    uint16_t used = 0;
+    uint16_t used_ptrs = 1;
+    tm_size_t size;
+
+    // allocate data
+    tm_debug("allocate");
+    index = talloc(40);
+    mu_assert(index);
+    used+=ALIGN_BLOCKS(40); used_ptrs++;
+    mu_assert(used == tm_pool.filled_blocks);
+    mu_assert(used_ptrs == tm_pool.ptrs_filled);
+    mu_assert(freed_isvalid());
+
+    // shrink data
+    tm_debug("shrink");
+    prev_index = index;
+    index = tm_realloc(index, 32);
+    mu_assert(index == prev_index);
+    used-=ALIGN_BLOCKS(8);  // more free memory
+    mu_assert(tm_sizeof(index) == 32);
+    tm_debug("%u==%u", used, tm_pool.filled_blocks);
+    mu_assert(used == tm_pool.filled_blocks);
+    mu_assert(used_ptrs == tm_pool.ptrs_filled);
+    mu_assert(1 == tm_pool.ptrs_freed);
+    mu_assert(1 == freed_count(&size));
+    mu_assert(8 == size);
+    mu_assert(ALIGN_BLOCKS(8) == tm_pool.freed_blocks);
+    mu_assert(freed_isvalid());
+
+    // grow data
+    tm_debug("grow");
+    index2 = tm_alloc(4);       // force heap allocation
+    used += ALIGN_BLOCKS(4); used_ptrs++;
+    mu_assert(used == tm_pool.filled_blocks);
+    mu_assert(used_ptrs == tm_pool.ptrs_filled);
+    mu_assert(tm_sizeof(index) == 32);
+
+    prev_index = index;
+    tm_debug("checking alloc");
+
+    index = tm_realloc(index, 60);
+    mu_assert(index);
+    mu_assert(index != prev_index);
+    used += ALIGN_BLOCKS(60) - ALIGN_BLOCKS(32);
+    tm_debug("%u==%u", used, tm_pool.filled_blocks);
+    mu_assert(used == tm_pool.filled_blocks);
+    mu_assert(used_ptrs == tm_pool.ptrs_filled);
+    mu_assert(freed_isvalid());
+
+    return NULL;
+}
+#endif
