@@ -29,15 +29,9 @@ tm_index_t      Pool_alloc(Pool *pool, tm_size_t size){
     tm_index_t index;
     size = TM_ALIGN_BLOCKS(size);
     if(Pool_available_blocks(pool) < size) return 0;
-
     index = Pool_freed_get(pool, size);
     if(index){
-        pool->filled_blocks += size;
-        pool->freed_blocks -= size;
-        pool->ptrs_filled++;
-        pool->ptrs_freed--;
-        Pool_filled_set(pool, index);
-        assert(Pool_points_bool(pool, index));
+        if(Pool_blocks(pool, index) != size) Pool_index_split(pool, index, size);
         return index;
     }
     if(Pool_heap_left(pool) < size){
@@ -76,7 +70,10 @@ tm_index_t      Pool_realloc(Pool *pool, tm_index_t index, tm_size_t size){
     prev_size = Pool_blocks(pool, index);
     if(size == Pool_blocks(pool, index)) return index;
     if(size < prev_size){  // shrink data
+        tm_debug("splitting");
         if(!Pool_index_split(pool, index, size)) return 0;
+        tm_debug("used=%u", pool->filled_blocks);
+        tm_debug("    blocks=%u", Pool_blocks(pool, index));
         return index;
     } else{  // grow data
         new_index = Pool_alloc(pool, size * TM_ALIGN_BYTES);
@@ -185,13 +182,21 @@ inline void     Pool_freed_insert(Pool *pool, const tm_index_t index){
 
 
 tm_index_t      Pool_freed_get(Pool *pool, const tm_blocks_t blocks){
+    // Get an index from the freed array of the specified size. The
+    //      index settings are automatically set to filled
     uint8_t bin;
     bin = freed_bin(blocks);
     tm_index_t index;
     for(; bin<TM_FREED_BINS; bin++){
         if(pool->freed[bin]){
             index = pool->freed[bin];
+            assert(!Pool_filled_bool(pool, index));
             Pool_freed_remove(pool, index);
+            pool->filled_blocks += Pool_blocks(pool, index);
+            pool->freed_blocks -= Pool_blocks(pool, index);
+            pool->ptrs_filled++;
+            pool->ptrs_freed--;
+            Pool_filled_set(pool, index);
             return index;
         }
     }
@@ -238,7 +243,7 @@ bool Pool_index_split(Pool *pool, const tm_index_t index, const tm_blocks_t bloc
     Pool_points_set(pool, new_index);
     assert(!Pool_filled_bool(pool, new_index));
 
-    if(Pool_filled_bool(pool, new_index)){
+    if(Pool_filled_bool(pool, index)){
         pool->freed_blocks += Pool_blocks(pool, index) - blocks;
         pool->filled_blocks -= Pool_blocks(pool, index) - blocks;
     }
@@ -250,6 +255,7 @@ bool Pool_index_split(Pool *pool, const tm_index_t index, const tm_blocks_t bloc
     // mark changes
     Pool_freed_insert(pool, new_index);
     if(pool->last_index == index) pool->last_index = new_index;
+    return true;
 }
 
 void Pool_index_remove(Pool *pool, const tm_index_t index, const tm_index_t prev_index){
@@ -310,6 +316,7 @@ tm_index_t      Pool_freed_count_bin(Pool *pool, uint8_t bin, tm_size_t *size, b
     assert(free);
     assert(free->prev == 0);
     while(1){
+        assert(!Pool_filled_bool(pool, index));
         if(pnt) printf("        prev=%u, ind=%u, next=%u\n", free->prev, index, free->next);
         *size += Pool_sizeof(pool, index);
         count++;
@@ -332,6 +339,7 @@ tm_index_t      Pool_freed_count_print(Pool *pool, tm_size_t *size, bool pnt){
         *size += size_get;
     }
     assert(count==pool->ptrs_freed);
+    tm_debug("%u==%u", *size, pool->freed_blocks * TM_ALIGN_BYTES);
     assert(*size==pool->freed_blocks * TM_ALIGN_BYTES);
     return count;
 }
