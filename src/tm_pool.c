@@ -55,6 +55,56 @@ tm_index_t      Pool_alloc(Pool *pool, tm_size_t size){
 }
 
 /*---------------------------------------------------------------------------*/
+tm_index_t      Pool_realloc(Pool *pool, tm_index_t index, tm_size_t size){
+    tm_index_t new_index;
+    tm_blocks_t prev_size;
+    size = TM_ALIGN_BLOCKS(size);
+
+    if(!index) return Pool_alloc(pool, size);
+    if(!Pool_filled_bool(pool, index)) return 0;
+    if(!size){
+        Pool_free(pool, index);
+        return 0;
+    }
+    new_index = Pool_next(pool, index);
+    if(!Pool_filled_bool(pool, new_index)){
+        // If next index is free, always join it first
+        Pool_freed_remove(pool, new_index);
+        Pool_bytes_fill(pool, Pool_blocks(pool, new_index));
+        pool->ptrs_freed--;
+        Pool_next(pool, index) = Pool_next(pool, new_index);
+        Pool_points_clear(pool, new_index);
+    }
+    prev_size = Pool_blocks(pool, index);
+    if(size == Pool_blocks(pool, index)) return index;
+    if(size < prev_size){  // shrink data
+        new_index = Pool_find_index(pool);
+        if(!new_index){
+            Pool_status_set(pool, TM_DEFRAG_FAST);
+            return 0;
+        }
+
+        // update new index for freed data
+        Pool_points_set(pool, new_index);
+        pool->pointers[new_index] = (poolptr) {.loc = Pool_loc(pool, index) + size,
+                                               .next = Pool_next(pool, index)};
+        Pool_next(pool, index) = new_index;
+
+        // mark changes
+        Pool_bytes_free(pool, prev_size - size);
+        pool->ptrs_freed++;
+        Pool_freed_insert(pool, new_index);
+        return index;
+    } else{  // grow data
+        new_index = Pool_alloc(pool, size * TM_ALIGN_BYTES);
+        if(!new_index) return 0;
+        Pool_memmove(pool, new_index, index);
+        Pool_free(pool, index);
+        return new_index;
+    }
+}
+
+/*---------------------------------------------------------------------------*/
 void            Pool_free(Pool *pool, const tm_index_t index){
     uint8_t bin;
     if(Pool_loc(pool, index) >= Pool_heap(pool)) return;
@@ -211,7 +261,6 @@ tm_index_t Pool_freed_count(Pool *pool, tm_size_t *size){
 bool            Pool_freed_isvalid(Pool *pool){
     tm_size_t size;
     tm_index_t count = Pool_freed_count(pool, &size);
-    tm_debug("size before=%u", size);
     size = TM_ALIGN_BLOCKS(size);
     if(!((count==pool->ptrs_freed) && (size==pool->freed_blocks))){
         tm_debug("freed: %u==%u", count, pool->ptrs_freed);

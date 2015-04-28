@@ -58,8 +58,8 @@ typedef struct {
     unsigned int    points[TM_MAX_BIT_INDEXES];     //!< bit array of used pointers (both used and freed)
     poolptr         pointers[TM_MAX_POOL_PTRS];     //!< This is the index lookup location
     tm_index_t      freed[TM_FREED_BINS];           //!< binned storage of all freed indexes
-    tm_blocks_t       filled_blocks;                //!< total amount of data allocated
-    tm_blocks_t       freed_blocks;                 //!< total amount of data freed
+    tm_blocks_t     filled_blocks;                //!< total amount of data allocated
+    tm_blocks_t     freed_blocks;                 //!< total amount of data freed
     tm_index_t      ptrs_filled;                    //!< total amount of pointers allocated
     tm_index_t      ptrs_freed;                     //!< total amount of pointers freed
     tm_index_t      find_index;                     //!< speed up find index
@@ -112,6 +112,16 @@ typedef struct {
 #define Pool_points_bool(p, index)   ((p)->points[BITARRAY_INDEX(index)] &   BITARRAY_BIT(index))
 #define Pool_points_set(p, index)    ((p)->points[BITARRAY_INDEX(index)] |=  BITARRAY_BIT(index))
 #define Pool_points_clear(p, index)  ((p)->points[BITARRAY_INDEX(index)] &= ~BITARRAY_BIT(index))
+
+#define Pool_bytes_free(p, size)   do{                  \
+        (p)->freed_blocks += size;                       \
+        (p)->filled_blocks -= size;                      \
+    }while(0)
+
+#define Pool_bytes_fill(p, size)   do{                  \
+        (p)->freed_blocks -= size;                       \
+        (p)->filled_blocks += size;                      \
+    }while(0)
 
 #define Pool_memmove(pool, index_to, index_from)  memmove(              \
             Pool_void_p(pool, index_to),                                  \
