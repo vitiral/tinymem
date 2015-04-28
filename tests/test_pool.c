@@ -7,33 +7,6 @@
 
 #if 0
 
-char *test_tm_pool_new(){
-    tm_index_t i;
-    tm_size_t size;
-    Pool_reset();
-
-    mu_assert(Pool_heap(pool) == 0);
-    mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE);
-
-    mu_assert(pool.filled[0] == 1);
-    mu_assert(pool.points[0] == 1);
-    for(i=1; i<TM_MAX_BIT_INDEXES; i++){
-        mu_assert(pool.filled[i] == 0);
-        mu_assert(pool.points[i] == 0);
-    }
-
-    for(i=0; i<TM_MAX_POOL_PTRS; i++){
-        mu_assert(pool.pointers[i].loc == 0);
-        mu_assert(pool.pointers[i].next == 0);
-    }
-
-    for(i=0; i<TM_FREED_BINS; i++){
-        mu_assert(pool.freed[i] == 0);
-    }
-    mu_assert(Pool_freed_count(pool, &size) == 0);
-    mu_assert(size == 0);
-    return NULL;
-}
 
 
 char *test_tm_pool_alloc(){
@@ -531,9 +504,9 @@ char *test_tm_threaded_time(){
 char *all_tests(){
     mu_suite_start();
 
-#if 0
     mu_run_test(test_tm_pool_new);
     mu_run_test(test_tm_pool_alloc);
+#if 0
     mu_run_test(test_tm_free_basic);
     mu_run_test(test_tm_pool_realloc);
     mu_run_test(test_tm_pool_defrag_full);

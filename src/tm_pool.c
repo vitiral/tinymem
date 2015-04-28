@@ -20,7 +20,7 @@
 #define TM_ALIGN_BYTES          sizeof(free_block)
 #define TM_ALIGN(size)          (((size) % TM_ALIGN_BYTES) ? \
     ((size) + TM_ALIGN_BYTES - ((size) % TM_ALIGN_BYTES)): (size))
-#define TM_ALIGN_BLOCKS(size)   TM_CEILING(size, TM_ALIGN_BYTES)
+#define ALIGN_BLOCKS(size)   TM_CEILING(size, TM_ALIGN_BYTES)
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -114,7 +114,7 @@ void index_extend(const tm_index_t index, const tm_blocks_t blocks, const bool f
 #define HEAP                        (tm_pool.pointers[0].loc)
 #define NEXT(index)                 (tm_pool.pointers[index].next)
 #define LOC_VOID(loc)               ((void*)tm_pool.pool + (loc))
-#define TM_BLOCKS(index)               (LOCATION(tm_pool.pointers[index].next) - \
+#define BLOCKS(index)               (LOCATION(tm_pool.pointers[index].next) - \
                                         LOCATION(index))
 
 /**
@@ -148,7 +148,7 @@ void index_extend(const tm_index_t index, const tm_blocks_t blocks, const bool f
 /*      Global Functions                                                     */
 
 inline tm_size_t tm_sizeof(const tm_index_t index){
-    return TM_BLOCKS(index) * TM_ALIGN_BYTES;
+    return BLOCKS(index) * TM_ALIGN_BYTES;
 }
 
 
@@ -167,11 +167,11 @@ void *          tm_void_p(const tm_index_t index){
 /*---------------------------------------------------------------------------*/
 tm_index_t      tm_alloc(tm_size_t size){
     tm_index_t index;
-    size = TM_ALIGN_BLOCKS(size);
+    size = ALIGN_BLOCKS(size);
     if(BLOCKS_LEFT < size) return 0;
     index = freed_get(size);
     if(index){
-        if(TM_BLOCKS(index) != size) index_split(index, size);
+        if(BLOCKS(index) != size) index_split(index, size);
         return index;
     }
     if(HEAP_LEFT < size){
@@ -192,7 +192,7 @@ tm_index_t      tm_alloc(tm_size_t size){
 tm_index_t      tm_realloc(tm_index_t index, tm_size_t size){
     tm_index_t new_index;
     tm_blocks_t prev_size;
-    size = TM_ALIGN_BLOCKS(size);
+    size = ALIGN_BLOCKS(size);
     tm_debug("used start=%u", tm_pool.filled_blocks);
 
     if(!index) return tm_alloc(size);
@@ -207,14 +207,14 @@ tm_index_t      tm_realloc(tm_index_t index, tm_size_t size){
         index_join(index, new_index);
     }
     tm_debug("used combined=%u", tm_pool.filled_blocks);
-    tm_debug("    blocks=%u", TM_BLOCKS(index));
-    prev_size = TM_BLOCKS(index);
-    if(size == TM_BLOCKS(index)) return index;
+    tm_debug("    blocks=%u", BLOCKS(index));
+    prev_size = BLOCKS(index);
+    if(size == BLOCKS(index)) return index;
     if(size < prev_size){  // shrink data
         tm_debug("splitting");
         if(!index_split(index, size)) return 0;
         tm_debug("used=%u", tm_pool.filled_blocks);
-        tm_debug("    blocks=%u", TM_BLOCKS(index));
+        tm_debug("    blocks=%u", BLOCKS(index));
         return index;
     } else{  // grow data
         new_index = tm_alloc(size * TM_ALIGN_BYTES);
@@ -231,8 +231,8 @@ void            tm_free(const tm_index_t index){
     if(LOCATION(index) >= HEAP) return;
     if(index >= TM_MAX_POOL_PTRS || !FILLED(index)) return;
     FILLED_CLEAR(index);
-    tm_pool.filled_blocks -= TM_BLOCKS(index);
-    tm_pool.freed_blocks += TM_BLOCKS(index);
+    tm_pool.filled_blocks -= BLOCKS(index);
+    tm_pool.freed_blocks += BLOCKS(index);
     tm_pool.ptrs_filled--;
     tm_pool.ptrs_freed++;
 
@@ -306,14 +306,14 @@ inline void     freed_remove(const tm_index_t index){
     if(free->prev){
         free_p(free->prev)->next = free->next;
     } else{ // free is first element in the array
-        tm_pool.freed[freed_bin(TM_BLOCKS(index))] = free->next;
+        tm_pool.freed[freed_bin(BLOCKS(index))] = free->next;
     }
     if(free->next) free_p(free->next)->prev = free->prev;
 }
 
 
 inline void     freed_insert(const tm_index_t index){
-    uint8_t bin = freed_bin(TM_BLOCKS(index));
+    uint8_t bin = freed_bin(BLOCKS(index));
     *free_p(index) = (free_block){.next=tm_pool.freed[bin], .prev=0};
     if(tm_pool.freed[bin]){
         free_p(tm_pool.freed[bin])->prev = index;
@@ -333,8 +333,8 @@ tm_index_t      freed_get(const tm_blocks_t blocks){
             index = tm_pool.freed[bin];
             assert(!FILLED(index));
             freed_remove(index);
-            tm_pool.filled_blocks += TM_BLOCKS(index);
-            tm_pool.freed_blocks -= TM_BLOCKS(index);
+            tm_pool.filled_blocks += BLOCKS(index);
+            tm_pool.freed_blocks -= BLOCKS(index);
             tm_pool.ptrs_filled++;
             tm_pool.ptrs_freed--;
             FILLED_SET(index);
@@ -353,8 +353,8 @@ void index_join(const tm_index_t index, const tm_index_t with_index){
     // TODO: this should join all the way up -- as many free indexes as it finds
     assert(!FILLED(with_index));
     if(FILLED(index)){
-        tm_pool.filled_blocks += TM_BLOCKS(with_index);
-        tm_pool.freed_blocks -= TM_BLOCKS(with_index);
+        tm_pool.filled_blocks += BLOCKS(with_index);
+        tm_pool.freed_blocks -= BLOCKS(with_index);
     }
     NEXT(index) = NEXT(with_index);
     index_remove(with_index, index);
@@ -369,7 +369,7 @@ bool index_split(const tm_index_t index, const tm_blocks_t blocks){
     // split an index so the index becomes size blocks. Automatically creates a new freed
     //      index to store the new free data
     //      returns true on success, false on failure
-    assert(blocks < TM_BLOCKS(index));
+    assert(blocks < BLOCKS(index));
     tm_index_t new_index = NEXT(index);
     if(!FILLED(new_index)){
         // If next index is free, always join it first. This also frees up new_index to
@@ -385,8 +385,8 @@ bool index_split(const tm_index_t index, const tm_blocks_t blocks){
     assert(!FILLED(new_index));
 
     if(FILLED(index)){
-        tm_pool.freed_blocks += TM_BLOCKS(index) - blocks;
-        tm_pool.filled_blocks -= TM_BLOCKS(index) - blocks;
+        tm_pool.freed_blocks += BLOCKS(index) - blocks;
+        tm_pool.filled_blocks -= BLOCKS(index) - blocks;
     }
     tm_pool.ptrs_freed++;
     tm_pool.pointers[new_index] = (poolptr) {.loc = LOCATION(index) + blocks,
@@ -404,10 +404,10 @@ void index_remove(const tm_index_t index, const tm_index_t prev_index){
     // from end (to combine heap)
     if(!FILLED(index)){
         freed_remove(index);
-        tm_pool.freed_blocks -= TM_BLOCKS(index);
+        tm_pool.freed_blocks -= BLOCKS(index);
         tm_pool.ptrs_freed--;
     } else{
-        tm_pool.filled_blocks -= TM_BLOCKS(index);
+        tm_pool.filled_blocks -= BLOCKS(index);
         tm_pool.ptrs_filled--;
     }
     if(!NEXT(index)) { // this is the last index
@@ -446,6 +446,9 @@ void index_extend(const tm_index_t index, const tm_blocks_t blocks,
 
 /*---------------------------------------------------------------------------*/
 /*      For Debug and Test                                                   */
+
+#define PRIME       (65599)
+
 tm_index_t      freed_count_bin(uint8_t bin, tm_size_t *size, bool pnt){
     // Get the number and the size of the items in bin
     tm_index_t prev_index;
@@ -492,7 +495,7 @@ tm_index_t freed_count(tm_size_t *size){
 bool            freed_isvalid(){
     tm_size_t size;
     tm_index_t count = freed_count(&size);
-    size = TM_ALIGN_BLOCKS(size);
+    size = ALIGN_BLOCKS(size);
     if(!((count==tm_pool.ptrs_freed) && (size==tm_pool.freed_blocks))){
         tm_debug("freed: %u==%u", count, tm_pool.ptrs_freed);
         tm_debug("size:  %u==%u", size, tm_pool.freed_blocks);
@@ -519,5 +522,115 @@ tm_index_t      freed_full_print(bool full){
 
 tm_index_t      freed_print(){
     freed_full_print(false);
+}
+
+void        fill_index(tm_index_t index){
+    uint32_t value = index * PRIME;
+    uint32_t *data = tm_uint32_p(index);
+    assert(data);
+    tm_blocks_t i;
+
+    if(FILLED(index)) data[0] = value;
+    for(i=1; i<BLOCKS(index); i++){
+        data[i] = value;
+    }
+}
+
+
+bool        check_index(tm_index_t index){
+    uint32_t value = index * PRIME;
+    uint32_t *data = tm_uint32_p(index);
+    assert(data);
+    tm_blocks_t i;
+
+    if(FILLED(index)){
+        if(data[0] != value) return false;
+    }
+    for(i=1; i<BLOCKS(index); i++){
+        if(data[i] != value) return false;
+    }
+    return true;
+}
+
+/*---------------------------------------------------------------------------*/
+/**         Test free and alloc (automatically fills data)                   */
+
+tm_index_t  talloc(tm_size_t size){
+    tm_index_t index = tm_alloc(size);
+    if(!index) return 0;
+    fill_index(index);
+    return index;
+}
+
+
+void        tfree(tm_index_t index){
+    tm_free(index);
+    fill_index(index);
+}
+
+/*---------------------------------------------------------------------------*/
+/*      Tests                                                                */
+#define mu_assert(test) if (!(test)) {assert(test); return "FAILED\n";}
+
+char *test_tm_pool_new(){
+    tm_index_t i;
+    tm_size_t size;
+    tm_reset();
+
+    mu_assert(HEAP == 0);
+    mu_assert(HEAP_LEFT == TM_POOL_SIZE);
+
+    mu_assert(tm_pool.filled[0] == 1);
+    mu_assert(tm_pool.points[0] == 1);
+    for(i=1; i<TM_MAX_BIT_INDEXES; i++){
+        mu_assert(tm_pool.filled[i] == 0);
+        mu_assert(tm_pool.points[i] == 0);
+    }
+
+    for(i=0; i<TM_MAX_POOL_PTRS; i++){
+        mu_assert(tm_pool.pointers[i].loc == 0);
+        mu_assert(tm_pool.pointers[i].next == 0);
+    }
+
+    for(i=0; i<TM_FREED_BINS; i++){
+        mu_assert(tm_pool.freed[i] == 0);
+    }
+    mu_assert(freed_count(&size) == 0);
+    mu_assert(size == 0);
+    return NULL;
+}
+
+char *test_tm_pool_alloc(){
+    tm_size_t size;
+    uint8_t i, n;
+    uint16_t heap = 0, ptrs=1;
+    tm_reset();
+
+    mu_assert(freed_count(&size) == 0);
+    mu_assert(size == 0);
+
+    tm_index_t index;
+    tm_index_t indexes[10];
+
+    index = talloc(sizeof(uint32_t));
+    mu_assert(index == 1);
+    mu_assert(tm_pool.pointers[1].loc == heap);
+    heap += ALIGN_BLOCKS(sizeof(uint32_t)); ptrs++;
+    mu_assert(HEAP == heap);
+    mu_assert(tm_pool.ptrs_filled == ptrs);
+
+    mu_assert(check_index(index));
+    for(i=0; i<10; i++){
+        indexes[i] = talloc(8);
+        mu_assert(indexes[i]);
+        mu_assert(tm_pool.pointers[i + 2].loc == heap);
+        heap += ALIGN_BLOCKS(8); ptrs++;
+        mu_assert(HEAP == heap);
+        mu_assert(tm_pool.ptrs_filled == ptrs);
+        mu_assert(i + 2 == indexes[i]);
+    }
+    mu_assert(check_index(index));
+    for(i=0; i<10; i++) mu_assert(check_index(indexes[i]));
+    return NULL;
 }
 

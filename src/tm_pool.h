@@ -89,13 +89,13 @@ inline void*        tm_void_p(const tm_index_t index);
 /**
  * \brief           Various data type casts
  */
-#define tm_char_p(pool, index)        ((char *)tm_void_p(pool, index))
-#define tm_int8_p(pool, index)        ((int8_t *)tm_void_p(pool, index))
-#define tm_uint8_p(pool, index)       ((uint8_t *)tm_void_p(pool, index))
-#define tm_int16_p(pool, index)       ((int16_t *)tm_void_p(pool, index))
-#define tm_uint16_p(pool, index)      ((uint16_t *)tm_void_p(pool, index))
-#define tm_int32_p(pool, index)       ((int32_t *)tm_void_p(pool, index))
-#define tm_uint32_p(pool, index)      ((uint32_t *)tm_void_p(pool, index))
+#define tm_char_p(index)        ((char *)tm_void_p(index))
+#define tm_int8_p(index)        ((int8_t *)tm_void_p(index))
+#define tm_uint8_p(index)       ((uint8_t *)tm_void_p(index))
+#define tm_int16_p(index)       ((int16_t *)tm_void_p(index))
+#define tm_uint16_p(index)      ((uint16_t *)tm_void_p(index))
+#define tm_int32_p(index)       ((int32_t *)tm_void_p(index))
+#define tm_uint32_p(index)      ((uint32_t *)tm_void_p(index))
 
 /*---------------------------------------------------------------------------*/
 /*      For Debug and Test                                                   */
