@@ -95,28 +95,27 @@ typedef struct {
  *                  Pool_filled* does operations on Pool's `filled` array
  *                  Pool_points* does operations on Pool's `points` array
  */
-#define Pool_available_blocks(p)     (TM_POOL_BLOCKS - (p)->filled_blocks)
-#define Pool_available(p)            (Pool_available_blocks(p) * TM_ALIGN_BYTES)
-#define Pool_pointers_left(p)        (TM_MAX_POOL_PTRS - ((p)->ptrs_filled + (p)->ptrs_filled))
-#define Pool_heap_left(p)            (TM_POOL_SIZE - Pool_heap(p))
-#define Pool_loc(p, index)           ((p)->pointers[index].loc)
-#define Pool_heap(p)                 ((p)->pointers[0].loc)
-#define Pool_next(p, index)          ((p)->pointers[index].next)
-#define Pool_loc_void_p(p, loc)      ((void*)(p)->pool + (loc))
+#define BLOCKS_LEFT                 (TM_POOL_BLOCKS - tm_pool.filled_blocks)
+#define PTRS_LEFT                   (TM_MAX_POOL_PTRS - (tm_pool.ptrs_filled + tm_pool.ptrs_filled))
+#define HEAP_LEFT                   (TM_POOL_SIZE - HEAP)
+#define LOCATION(index)             (tm_pool.pointers[index].loc)
+#define HEAP                        (tm_pool.pointers[0].loc)
+#define NEXT(index)                 (tm_pool.pointers[index].next)
+#define LOC_VOID(loc)               ((void*)tm_pool.pool + (loc))
 
 #define BITARRAY_INDEX(index)        (index / 8)
 #define BITARRAY_BIT(index)          (1 << (index % 8))
-#define Pool_filled_bool(p, index)   ((p)->filled[BITARRAY_INDEX(index)] &   BITARRAY_BIT(index))
-#define Pool_filled_set(p, index)    ((p)->filled[BITARRAY_INDEX(index)] |=  BITARRAY_BIT(index))
-#define Pool_filled_clear(p, index)  ((p)->filled[BITARRAY_INDEX(index)] &= ~BITARRAY_BIT(index))
-#define Pool_points_bool(p, index)   ((p)->points[BITARRAY_INDEX(index)] &   BITARRAY_BIT(index))
-#define Pool_points_set(p, index)    ((p)->points[BITARRAY_INDEX(index)] |=  BITARRAY_BIT(index))
-#define Pool_points_clear(p, index)  ((p)->points[BITARRAY_INDEX(index)] &= ~BITARRAY_BIT(index))
+#define FILLED(index)               (tm_pool.filled[BITARRAY_INDEX(index)] &   BITARRAY_BIT(index))
+#define FILLED_SET(index)           (tm_pool.filled[BITARRAY_INDEX(index)] |=  BITARRAY_BIT(index))
+#define FILLED_CLEAR(index)         (tm_pool.filled[BITARRAY_INDEX(index)] &= ~BITARRAY_BIT(index))
+#define POINTS(index)               (tm_pool.points[BITARRAY_INDEX(index)] &   BITARRAY_BIT(index))
+#define POINTS_SET(index)           (tm_pool.points[BITARRAY_INDEX(index)] |=  BITARRAY_BIT(index))
+#define POINTS_CLEAR(index)         (tm_pool.points[BITARRAY_INDEX(index)] &= ~BITARRAY_BIT(index))
 
-#define Pool_memmove(pool, index_to, index_from)  memmove(              \
-            Pool_void_p(pool, index_to),                                  \
-            Pool_void_p(pool, index_from),                                \
-            Pool_sizeof(pool, index_from)                               \
+#define Pool_memmove(index_to, index_from)  memmove(                \
+            tm_void_p(index_to),                                    \
+            tm_void_p(index_from),                                  \
+            tm_sizeof(index_from)                                   \
         )
 
 
@@ -125,9 +124,9 @@ typedef struct {
  * \brief           Get, set or clear the status bit (0 or 1) of name
  * \return uint8_t  status bit
  */
-#define Pool_status(p, name)         (((p)->status) & (name))
-#define Pool_status_set(p, name)     ((p)->status |= (name))
-#define Pool_status_clear(p, name)   ((p)->status &= ~(name))
+#define STATUS(name)                ((tm_pool.status) & (name))
+#define STATUS_SET(name)            (tm_pool.status |= (name))
+#define STATUS_CLEAR(name)          (tm_pool.status &= ~(name))
 
 
 /*---------------------------------------------------------------------------*/
@@ -135,9 +134,9 @@ typedef struct {
  * \brief           Get the sizeof data at index in bytes
  * \return tm_size_t  the sizeof the data pointed to by index
  */
-#define Pool_sizeof(p, index)        (Pool_blocks(p, index) * TM_ALIGN_BYTES)
-#define Pool_blocks(p, index)        (Pool_loc(p, (p)->pointers[index].next) - \
-                                      Pool_loc(p, index))
+#define tm_sizeof(index)            (BLOCKS(index) * TM_ALIGN_BYTES)
+#define BLOCKS(index)               (LOCATION(tm_pool.pointers[index].next) - \
+                                        LOCATION(index))
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -147,7 +146,7 @@ typedef struct {
  * \return          tm_index_t corresponding to memory location
  *                  On error or if not enough memory, return value == 0
  */
-tm_index_t          Pool_alloc(Pool *pool, tm_size_t size);
+tm_index_t          Pool_alloc(tm_size_t size);
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -163,7 +162,7 @@ tm_index_t          Pool_alloc(Pool *pool, tm_size_t size);
  *                  If return value == 0, then no change has been done
  *                  (or index has been freed if size=0)
  */
-tm_index_t          Pool_realloc(Pool *pool, tm_index_t index, tm_size_t size);
+tm_index_t          Pool_realloc(tm_index_t index, tm_size_t size);
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -171,7 +170,7 @@ tm_index_t          Pool_realloc(Pool *pool, tm_index_t index, tm_size_t size);
  * \param pool      pointer to Pool struct
  * \param index     tm_index_t to free
  */
-void                Pool_free(Pool *pool, const tm_index_t index);
+void                Pool_free(const tm_index_t index);
 
 
 /*---------------------------------------------------------------------------*/
@@ -181,24 +180,24 @@ void                Pool_free(Pool *pool, const tm_index_t index);
  * \param index     tm_index_t to get pointer to
  * \return          void* pointer to actual data
  */
-inline void*        Pool_void_p(const Pool *pool, const tm_index_t index);
+inline void*        tm_void_p(const tm_index_t index);
 
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           Various data type casts
  */
-#define Pool_char_p(pool, index)        ((char *)Pool_void_p(pool, index))
-#define Pool_int8_p(pool, index)        ((int8_t *)Pool_void_p(pool, index))
-#define Pool_uint8_p(pool, index)       ((uint8_t *)Pool_void_p(pool, index))
-#define Pool_int16_p(pool, index)       ((int16_t *)Pool_void_p(pool, index))
-#define Pool_uint16_p(pool, index)      ((uint16_t *)Pool_void_p(pool, index))
-#define Pool_int32_p(pool, index)       ((int32_t *)Pool_void_p(pool, index))
-#define Pool_uint32_p(pool, index)      ((uint32_t *)Pool_void_p(pool, index))
+#define Pool_char_p(pool, index)        ((char *)tm_void_p(pool, index))
+#define Pool_int8_p(pool, index)        ((int8_t *)tm_void_p(pool, index))
+#define Pool_uint8_p(pool, index)       ((uint8_t *)tm_void_p(pool, index))
+#define Pool_int16_p(pool, index)       ((int16_t *)tm_void_p(pool, index))
+#define Pool_uint16_p(pool, index)      ((uint16_t *)tm_void_p(pool, index))
+#define Pool_int32_p(pool, index)       ((int32_t *)tm_void_p(pool, index))
+#define Pool_uint32_p(pool, index)      ((uint32_t *)tm_void_p(pool, index))
 
 /*---------------------------------------------------------------------------*/
 /*      For Debug and Test                                                   */
-tm_index_t          Pool_freed_count(Pool *pool, tm_size_t *size);
-tm_index_t          Pool_freed_print(Pool *pool);
+tm_index_t          Pool_freed_count(tm_size_t *size);
+tm_index_t          Pool_freed_print();
 
 #endif
 /** @} */

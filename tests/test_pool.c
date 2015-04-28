@@ -5,31 +5,30 @@
 
 #define TABLE_STANDIN NULL
 
-Pool gpool = Pool_init();
+#if 0
 
 char *test_tm_pool_new(){
     tm_index_t i;
     tm_size_t size;
-    Pool *pool = &gpool;
-    *pool = Pool_init();
+    Pool_reset();
 
     mu_assert(Pool_heap(pool) == 0);
     mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE);
 
-    mu_assert(pool->filled[0] == 1);
-    mu_assert(pool->points[0] == 1);
+    mu_assert(pool.filled[0] == 1);
+    mu_assert(pool.points[0] == 1);
     for(i=1; i<TM_MAX_BIT_INDEXES; i++){
-        mu_assert(pool->filled[i] == 0);
-        mu_assert(pool->points[i] == 0);
+        mu_assert(pool.filled[i] == 0);
+        mu_assert(pool.points[i] == 0);
     }
 
     for(i=0; i<TM_MAX_POOL_PTRS; i++){
-        mu_assert(pool->pointers[i].loc == 0);
-        mu_assert(pool->pointers[i].next == 0);
+        mu_assert(pool.pointers[i].loc == 0);
+        mu_assert(pool.pointers[i].next == 0);
     }
 
     for(i=0; i<TM_FREED_BINS; i++){
-        mu_assert(pool->freed[i] == 0);
+        mu_assert(pool.freed[i] == 0);
     }
     mu_assert(Pool_freed_count(pool, &size) == 0);
     mu_assert(size == 0);
@@ -50,21 +49,21 @@ char *test_tm_pool_alloc(){
     tm_index_t index;
     tm_index_t indexes[10];
 
-    index = Pool_talloc(pool, sizeof(uint32_t));
+    index = Pool_talloc(sizeof(uint32_t));
     mu_assert(index == 1);
-    mu_assert(pool->pointers[1].loc == heap);
+    mu_assert(pool.pointers[1].loc == heap);
     heap += TM_ALIGN_BLOCKS(sizeof(uint32_t)); ptrs++;
     mu_assert(Pool_heap(pool) == heap);
-    mu_assert(pool->ptrs_filled == ptrs);
+    mu_assert(pool.ptrs_filled == ptrs);
 
     mu_assert(check_index(pool, index));
     for(i=0; i<10; i++){
-        indexes[i] = Pool_talloc(pool, 8);
+        indexes[i] = Pool_talloc(8);
         mu_assert(indexes[i]);
-        mu_assert(pool->pointers[i + 2].loc == heap);
+        mu_assert(pool.pointers[i + 2].loc == heap);
         heap += TM_ALIGN_BLOCKS(8); ptrs++;
         mu_assert(Pool_heap(pool) == heap);
-        mu_assert(pool->ptrs_filled == ptrs);
+        mu_assert(pool.ptrs_filled == ptrs);
         mu_assert(i + 2 == indexes[i]);
     }
     mu_assert(check_index(pool, index));
@@ -88,16 +87,16 @@ char *test_tm_free_basic(){
 
     // allocate a bunch of memory, then free chunks of it.
     // Then allocate it again, making sure the heap doesn't change
-    filled_ptrs = pool->ptrs_filled;
-    filled_blocks = pool->filled_blocks;
+    filled_ptrs = pool.ptrs_filled;
+    filled_blocks = pool.filled_blocks;
     for(i=0; i<100; i++){
-        indexes[i] = Pool_talloc(pool, i+1);
+        indexes[i] = Pool_talloc(i+1);
         mu_assert(indexes[i]);
         filled_ptrs++;
         filled_blocks += TM_ALIGN_BLOCKS(i+1);
         mu_assert(Pool_sizeof(pool, indexes[i]) == TM_ALIGN(i+1));
-        mu_assert(filled_ptrs == pool->ptrs_filled);
-        mu_assert(filled_blocks == pool->filled_blocks);
+        mu_assert(filled_ptrs == pool.ptrs_filled);
+        mu_assert(filled_blocks == pool.filled_blocks);
         mu_assert(Pool_freed_isvalid(pool));
     }
     for(i=0; i<100; i++) mu_assert(Pool_sizeof(pool, indexes[i]) == TM_ALIGN(i+1));
@@ -109,8 +108,8 @@ char *test_tm_free_basic(){
         Pool_free(pool, indexes[i]);
         filled_ptrs--;
         filled_blocks -= TM_ALIGN_BLOCKS(i+1);
-        mu_assert(filled_ptrs == pool->ptrs_filled);
-        mu_assert(filled_blocks == pool->filled_blocks);
+        mu_assert(filled_ptrs == pool.ptrs_filled);
+        mu_assert(filled_blocks == pool.filled_blocks);
         mu_assert(Pool_freed_isvalid(pool));
     }
     for(i=0; i<100; i++) mu_assert(check_index(pool, indexes[i]));
@@ -132,8 +131,8 @@ char *test_tm_pool_realloc(){
     index = Pool_talloc(pool, 40);
     mu_assert(index);
     used+=TM_ALIGN_BLOCKS(40); used_ptrs++;
-    mu_assert(used == pool->filled_blocks);
-    mu_assert(used_ptrs == pool->ptrs_filled);
+    mu_assert(used == pool.filled_blocks);
+    mu_assert(used_ptrs == pool.ptrs_filled);
     mu_assert(Pool_freed_isvalid(pool));
 
     // shrink data
@@ -143,21 +142,21 @@ char *test_tm_pool_realloc(){
     mu_assert(index == prev_index);
     used-=TM_ALIGN_BLOCKS(8);  // more free memory
     mu_assert(Pool_sizeof(pool, index) == 32);
-    tm_debug("%u==%u", used, pool->filled_blocks);
-    mu_assert(used == pool->filled_blocks);
-    mu_assert(used_ptrs == pool->ptrs_filled);
-    mu_assert(1 == pool->ptrs_freed);
+    tm_debug("%u==%u", used, pool.filled_blocks);
+    mu_assert(used == pool.filled_blocks);
+    mu_assert(used_ptrs == pool.ptrs_filled);
+    mu_assert(1 == pool.ptrs_freed);
     mu_assert(1 == Pool_freed_count(pool, &size));
     mu_assert(8 == size);
-    mu_assert(TM_ALIGN_BLOCKS(8) == pool->freed_blocks);
+    mu_assert(TM_ALIGN_BLOCKS(8) == pool.freed_blocks);
     mu_assert(Pool_freed_isvalid(pool));
 
     // grow data
     tm_debug("grow");
     index2 = Pool_alloc(pool, 4);       // force heap allocation
     used += TM_ALIGN_BLOCKS(4); used_ptrs++;
-    mu_assert(used == pool->filled_blocks);
-    mu_assert(used_ptrs == pool->ptrs_filled);
+    mu_assert(used == pool.filled_blocks);
+    mu_assert(used_ptrs == pool.ptrs_filled);
     mu_assert(Pool_sizeof(pool, index) == 32);
 
     prev_index = index;
@@ -167,15 +166,14 @@ char *test_tm_pool_realloc(){
     mu_assert(index);
     mu_assert(index != prev_index);
     used += TM_ALIGN_BLOCKS(60) - TM_ALIGN_BLOCKS(32);
-    tm_debug("%u==%u", used, pool->filled_blocks);
-    mu_assert(used == pool->filled_blocks);
-    mu_assert(used_ptrs == pool->ptrs_filled);
+    tm_debug("%u==%u", used, pool.filled_blocks);
+    mu_assert(used == pool.filled_blocks);
+    mu_assert(used_ptrs == pool.ptrs_filled);
     mu_assert(Pool_freed_isvalid(pool));
 
     return NULL;
 }
 
-#if 0
 
 
 
@@ -183,16 +181,16 @@ char *test_tm_pool_realloc(){
     other_index = Pool_realloc(pool, 0, 100);
     mu_assert(other_index, "sanity");
     used+=100; used_ptrs++;
-    mu_assert(used == pool->used_bytes, "used");
-    mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+    mu_assert(used == pool.used_bytes, "used");
+    mu_assert(used_ptrs == pool.used_pointers, "used ptrs");
 
     // size=0 frees data
     prev_index = Pool_realloc(pool, index, 0);
     mu_assert(!prev_index, "is null");
     mu_assert(!Pool_filled_bool(pool, index), "is freed");
     used -= 60; used_ptrs--;  // memory freed, pointer freed
-    mu_assert(used == pool->used_bytes, "used");
-    mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+    mu_assert(used == pool.used_bytes, "used");
+    mu_assert(used_ptrs == pool.used_pointers, "used ptrs");
 
     Pool_del(pool);
     return NULL;
@@ -201,21 +199,21 @@ char *test_tm_pool_realloc(){
 
     int8_t i, j;
     heap = 5200;
-    mu_assert(pool->heap == heap, "fbasic heap1");
+    mu_assert(pool.heap == heap, "fbasic heap1");
     j = 0;
     for(i=2; i<100; i+=2){ // free the even ones
         Pool_free(pool, indexes[i]);
         filled_ptrs--;
         filled_bytes-= COMPUTE_SIZE(i+1);
-        mu_assert(filled_ptrs == pool->ptrs_filled, "used ptrs");
-        mu_assert(filled_bytes == pool->filled_bytes, "used bytes");
+        mu_assert(filled_ptrs == pool.ptrs_filled, "used ptrs");
+        mu_assert(filled_bytes == pool.filled_bytes, "used bytes");
         j+=2;
         mu_assert(Pool_freed_isvalid(pool), "freed isvalid");
     }
 
     temp=0;
     for(i=0; i<TM_FREED_BINS; i++){
-        lia = Pool_LIA(pool, pool->freed[i]);
+        lia = Pool_LIA(pool, pool.freed[i]);
         if(!lia) continue;
         j = 0;
         while(lia->indexes[j]){
@@ -225,24 +223,24 @@ char *test_tm_pool_realloc(){
     }
     mu_assert(temp == 49, "fbasic total freed");
 
-    mu_assert(pool->heap == heap, "fbasic heap2"); // heap doesn't change
+    mu_assert(pool.heap == heap, "fbasic heap2"); // heap doesn't change
 
     for(i=98; i>0; i-=2){   // allocate the even ones again (in reverse order)
         mu_assert(Pool_sizeof(pool, indexes[i]) == COMPUTE_SIZE(i+1), "fbasic size");
         mu_assert(freed_hash(Pool_sizeof(pool, indexes[i])) == freed_hash(COMPUTE_SIZE(i+1)), "fbasic hash");
         indexes[i] = Pool_talloc(pool, i+1);
         mu_assert(indexes[i], "fbasic alloc2");
-        mu_assert(pool->heap == heap, "fbasic heap continuous"); // heap doesn't change
+        mu_assert(pool.heap == heap, "fbasic heap continuous"); // heap doesn't change
         used_ptrs++;
         used_bytes+=COMPUTE_SIZE(i+1);
-        mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
-        mu_assert(used_bytes == pool->used_bytes, "used bytes");
+        mu_assert(used_ptrs == pool.used_pointers, "used ptrs");
+        mu_assert(used_bytes == pool.used_bytes, "used bytes");
         mu_assert(Pool_freed_isvalid(pool), "freed isvalid");
     }
 
     index = Pool_talloc(pool, 4);
     heap += 4;
-    mu_assert(pool->heap == heap, "fbasic heap4"); // heap finally changes
+    mu_assert(pool.heap == heap, "fbasic heap4"); // heap finally changes
     mu_assert(Pool_freed_isvalid(pool), "freed isvalid");
     Pool_del(pool);
     return NULL;
@@ -263,8 +261,8 @@ char *test_tm_pool_realloc(){
     index = Pool_talloc(pool, 40);
     mu_assert(index, "sanity");
     used+=40; used_ptrs++;
-    mu_assert(used == pool->used_bytes, "used");
-    mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+    mu_assert(used == pool.used_bytes, "used");
+    mu_assert(used_ptrs == pool.used_pointers, "used ptrs");
 
     // shrink data
     prev_index = index;
@@ -272,8 +270,8 @@ char *test_tm_pool_realloc(){
     mu_assert(index, "sanity");
     mu_assert(index == prev_index, "no change");
     used-=7;  // more free memory, free pointers don't "use pointers"
-    mu_assert(used == pool->used_bytes, "used");
-    mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+    mu_assert(used == pool.used_bytes, "used");
+    mu_assert(used_ptrs == pool.used_pointers, "used ptrs");
 
     // grow data
     prev_index = index;
@@ -281,23 +279,23 @@ char *test_tm_pool_realloc(){
     mu_assert(index, "sanity");
     mu_assert(index != prev_index, "changed");
     used += 60 - 33;  // use more memory
-    mu_assert(used == pool->used_bytes, "used");
-    mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+    mu_assert(used == pool.used_bytes, "used");
+    mu_assert(used_ptrs == pool.used_pointers, "used ptrs");
 
     // "null" pointer acts as alloc
     other_index = Pool_realloc(pool, 0, 100);
     mu_assert(other_index, "sanity");
     used+=100; used_ptrs++;
-    mu_assert(used == pool->used_bytes, "used");
-    mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+    mu_assert(used == pool.used_bytes, "used");
+    mu_assert(used_ptrs == pool.used_pointers, "used ptrs");
 
     // size=0 frees data
     prev_index = Pool_realloc(pool, index, 0);
     mu_assert(!prev_index, "is null");
     mu_assert(!Pool_filled_bool(pool, index), "is freed");
     used -= 60; used_ptrs--;  // memory freed, pointer freed
-    mu_assert(used == pool->used_bytes, "used");
-    mu_assert(used_ptrs == pool->used_pointers, "used ptrs");
+    mu_assert(used == pool.used_bytes, "used");
+    mu_assert(used_ptrs == pool.used_pointers, "used ptrs");
 
     Pool_del(pool);
     return NULL;
@@ -311,13 +309,13 @@ char *test_tm_pool_defrag_full(){
     tm_size_t used = 0;
     const tm_size_t calculated_use = 40400;
     Pool *pool = Pool_new();
-    mu_assert(pool->stack == TM_POOL_SIZE, "new stack");
+    mu_assert(pool.stack == TM_POOL_SIZE, "new stack");
     mu_assert(pool, "fdefrag new");
     // allocate a bunch of data and initialize it
     c = 0;
     for(i=1; i<201; i++){
         used += COMPUTE_SIZE(i*2);
-        mu_assert(pool->stack == TM_POOL_SIZE, "using stack");
+        mu_assert(pool.stack == TM_POOL_SIZE, "using stack");
         data[i] = Pool_talloc(pool, i * 2);
         mu_assert(data[i], "fdefrag alloc");
         for(j=0;j<i;j++){
@@ -325,8 +323,8 @@ char *test_tm_pool_defrag_full(){
             c++;
         }
     }
-    mu_assert(pool->used_pointers == 1 + 200, "fdefrag used pointers");
-    mu_assert(pool->used_bytes == calculated_use, "fdefrag used bytes");
+    mu_assert(pool.used_pointers == 1 + 200, "fdefrag used pointers");
+    mu_assert(pool.used_bytes == calculated_use, "fdefrag used bytes");
     mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - calculated_use, "fdefrag heap left");
     mu_assert(Pool_available(pool) == TM_POOL_SIZE - calculated_use, "fdefrag available 1");
     // free odd elements
@@ -340,7 +338,7 @@ char *test_tm_pool_defrag_full(){
 
     mu_assert(Pool_heap_left(pool) == TM_POOL_SIZE - 20200, "fdefrag heap left 3");
     mu_assert(Pool_available(pool) == TM_POOL_SIZE - 20200, "defrag available 3");
-    mu_assert(pool->used_pointers == 101, "defrag ptrs used 3");
+    mu_assert(pool.used_pointers == 101, "defrag ptrs used 3");
     c = 0;
     for(i=1; i<201; i++){
         if(! i%2){
@@ -417,12 +415,12 @@ char *test_tm_threaded(){
     // we now have some free data we can allocate from inside the defragger
     c = 0;
     i2 = i;
-    heap = pool->heap;
+    heap = pool.heap;
     for(i=1; i<35; i+=2){
         size = Pool_space_free_in_defrag(pool);
         data[i] = Pool_talloc(pool, i * 2);
         mu_assert(data[i], "alloc during defrag");
-        mu_assert(heap == pool->heap, "not allocated off heap");
+        mu_assert(heap == pool.heap, "not allocated off heap");
         size -= COMPUTE_SIZE(i*2);
         mu_assert(Pool_space_free_in_defrag(pool) == size, "free space 1");
         for(j=0;j<i;j++){
@@ -453,26 +451,26 @@ char *test_tm_threaded(){
         }
     }
 
-    stack = pool->ustack;
+    stack = pool.ustack;
     // Awesome, now let's free a whole bunch of stuff and verify it works
     for(i=150; i<180; i+=2){
         Pool_free(pool, data[i]);
         mu_assert(!Pool_filled_bool(pool, data[i]), "is freed");
         stack -= sizeof(tm_index_t);
-        mu_assert(pool->ustack == stack, "free appended");
+        mu_assert(pool.ustack == stack, "free appended");
     }
 
     // Complete the defrag
     while(Pool_defrag_full(pool));
 
     // re-allocate, verifying that it doesn't come off the heap
-    heap = pool->heap;
+    heap = pool.heap;
     for(i=150; i<180; i+=2){
         mu_assert(Pool_points_bool(pool, data[i]), "does point");
         mu_assert(!Pool_filled_bool(pool, data[i]), "is still freed");
         data[i] = Pool_talloc(pool, i * 2);
         mu_assert(data[i], "alloc");
-        mu_assert(heap == pool->heap, "heap not changed");
+        mu_assert(heap == pool.heap, "heap not changed");
         for(j=0;j<i;j++) Pool_uint16_p(pool, data[i])[j] = 0xF5F5;
     }
 
@@ -533,11 +531,11 @@ char *test_tm_threaded_time(){
 char *all_tests(){
     mu_suite_start();
 
+#if 0
     mu_run_test(test_tm_pool_new);
     mu_run_test(test_tm_pool_alloc);
     mu_run_test(test_tm_free_basic);
     mu_run_test(test_tm_pool_realloc);
-#if 0
     mu_run_test(test_tm_pool_defrag_full);
 
     mu_run_test(test_tm_threaded);
