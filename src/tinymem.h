@@ -1,6 +1,7 @@
 #ifndef __tinymem_h
 #define __tinymem_h
 #include <stdlib.h>
+#include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
 #undef NDEBUG
