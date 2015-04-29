@@ -128,8 +128,8 @@ bool                check_index(tm_index_t index);
 #define LOCATION(index)             (tm_pool.pointers[index].loc)
 #define HEAP                        (tm_pool.pointers[0].loc)
 #define NEXT(index)                 (tm_pool.pointers[index].next)
-#define FREE_NEXT(index)            (((free_block *)tm_void_p(index))->next)
-#define FREE_PREV(index)            (((free_block *)tm_void_p(index))->prev)
+#define FREE_NEXT(index)            ((free_p(index))->next)
+#define FREE_PREV(index)            ((free_p(index))->prev)
 #define LOC_VOID(loc)               ((void*)tm_pool.pool + (loc))
 #define BLOCKS(index)               (LOCATION(tm_pool.pointers[index].next) - \
                                         LOCATION(index))
@@ -138,8 +138,8 @@ bool                check_index(tm_index_t index);
  *                  FILLED* does operations on Pool's `filled` array
  *                  POINTS* does operations on Pool's `points` array
  */
-#define BITARRAY_INDEX(index)        (index / 8)
-#define BITARRAY_BIT(index)          (1 << (index % 8))
+#define BITARRAY_INDEX(index)       (index / (sizeof(int) * 8))
+#define BITARRAY_BIT(index)         (1 << (index % (sizeof(int) * 8)))
 #define FILLED(index)               (tm_pool.filled[BITARRAY_INDEX(index)] &   BITARRAY_BIT(index))
 #define FILLED_SET(index)           (tm_pool.filled[BITARRAY_INDEX(index)] |=  BITARRAY_BIT(index))
 #define FILLED_CLEAR(index)         (tm_pool.filled[BITARRAY_INDEX(index)] &= ~BITARRAY_BIT(index))
@@ -248,10 +248,6 @@ void            tm_free(const tm_index_t index){
     tm_pool.ptrs_freed++;
 
     freed_insert(index);
-    if(index==354){
-        tm_debug("freeing index 354");
-        assert(0);
-    }
     if(!FILLED(NEXT(index))) index_join(index, NEXT(index));
 }
 
@@ -592,6 +588,8 @@ bool            freed_isvalid(){
 bool            freed_isin(const tm_index_t index){
     uint8_t findex = tm_pool.freed[freed_bin(BLOCKS(index))];
     while(findex){
+        tm_debug("findex=%u", findex);
+        assert(findex != FREE_NEXT(findex));
         if(findex==index) return true;
         findex = FREE_NEXT(findex);
     }
@@ -639,6 +637,7 @@ bool                indexes_isvalid(){
             }
         }
     }
+    return true;
 }
 
 void        fill_index(tm_index_t index){
@@ -713,7 +712,14 @@ char *test_tinymem(){
     tm_index_t indexes[TEST_INDEXES] = {0};
     tm_size_t used = 0, size;
     uint8_t mod = 125;
-    printf("rand=");
+    tm_debug("bindexes=%u, indexes=%u", MAX_BIT_INDEXES, TM_MAX_POOL_PTRS);
+    for(j=1; j<MAX_BIT_INDEXES; j++){
+        mu_assert(tm_pool.filled[j] == 0);
+        mu_assert(tm_pool.points[j] == 0);
+    }
+    mu_assert(freed_isvalid());
+    mu_assert(indexes_isvalid());
+    for(j=0; j<TEST_INDEXES; j++) mu_assert(indexes[j] == 0);
     for(loops=0; loops<10; loops++){
         tm_debug("loop=%u", loops);
         for(i=rand() % MAX_SKIP; i<TEST_INDEXES; i+=rand() % MAX_SKIP){
@@ -730,7 +736,7 @@ char *test_tinymem(){
                 size = size ? : size + 1;
                 if(size <= AVAIL_BYTES){
                     tm_debug("filling i=%u", i);
-                    if(i==354){
+                    if(i==362){
                         tm_debug("here");
                     }
                     indexes[i] = talloc(size);
