@@ -532,27 +532,21 @@ void index_extend(const tm_index_t index, const tm_blocks_t blocks,
 
 tm_index_t      freed_count_bin(uint8_t bin, tm_size_t *size, bool pnt){
     // Get the number and the size of the items in bin
-    tm_index_t prev_index;
     tm_index_t index = tm_pool.freed[bin];
     tm_index_t count = 0;
     *size = 0;
     if(!index) return 0;
-    free_block *free = free_p(index);
-    assert(free);
-    assert(free->prev == 0);
-    while(1){
+    assert(FREE_PREV(index)== 0);
+    while(index){
         assert(!FILLED(index));
         assert(POINTS(index));
-        if(pnt) printf("        prev=%u, ind=%u, next=%u\n", free->prev, index, free->next);
+        if(pnt) printf("        prev=%u, ind=%u, next=%u\n", FREE_PREV(index), index, FREE_NEXT(index));
         *size += tm_sizeof(index);
         count++;
-        prev_index = index;
-        index = free->next;
-        if(!free->next) return count;
-        free = free_p(index);
-        assert(free);
-        assert(free->prev == prev_index);
+        if(FREE_NEXT(index)) assert(index == FREE_PREV(FREE_NEXT(index)));
+        index = FREE_NEXT(index);
     }
+    return count;
 }
 
 tm_index_t      freed_count_print(tm_size_t *size, bool pnt){
@@ -586,7 +580,8 @@ bool            freed_isvalid(){
 }
 
 bool            freed_isin(const tm_index_t index){
-    uint8_t findex = tm_pool.freed[freed_bin(BLOCKS(index))];
+    tm_debug("bin=%u", freed_bin(BLOCKS(index)));
+    tm_index_t findex = tm_pool.freed[freed_bin(BLOCKS(index))];
     while(findex){
         tm_debug("findex=%u", findex);
         assert(findex != FREE_NEXT(findex));
@@ -742,8 +737,9 @@ char *test_tinymem(){
                     indexes[i] = talloc(size);
                 }
             }
-            mu_assert(indexes_isvalid());
+            freed_full_print(true);
             mu_assert(freed_isvalid());
+            mu_assert(indexes_isvalid());
             for(j=0; j<TEST_INDEXES; j++){
                 if(indexes[j]) mu_assert(check_index(indexes[j]));
             }
