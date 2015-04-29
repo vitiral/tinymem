@@ -135,7 +135,8 @@ bool                check_index(tm_index_t index);
  */
 #define BLOCKS_LEFT                 (POOL_BLOCKS - tm_pool.filled_blocks)
 #define BYTES_LEFT                  (BLOCKS_LEFT * BLOCK_SIZE)
-#define PTRS_LEFT                   (TM_MAX_POOL_PTRS - (tm_pool.ptrs_filled + tm_pool.ptrs_filled))
+#define PTRS_USED                   (tm_pool.ptrs_filled + tm_pool.ptrs_filled)
+#define PTRS_LEFT                   (TM_MAX_POOL_PTRS - PTRS_USED)
 #define HEAP_LEFT                   (TM_POOL_SIZE - HEAP)
 
 /**
@@ -207,6 +208,7 @@ tm_index_t      tm_alloc(tm_size_t size){
     size = ALIGN_BLOCKS(size);  // convert from bytes to blocks
     if(BLOCKS_LEFT < size) return 0;
     index = freed_get(size);
+    assert(freed_isvalid());
     if(index){
         if(BLOCKS(index) != size){ // Split the index if it is too big
             if(!index_split(index, size)){
@@ -571,7 +573,7 @@ void index_remove(const tm_index_t index, const tm_index_t prev_index){
         tm_pool.ptrs_filled--;
     }
 
-    if(index == tm_pool.first_index) tm_pool.first_index = NEXT(index);  // deal with first index
+    if(index == tm_pool.first_index) tm_pool.first_index = NEXT(index);
     // Combine indexes (or heap)
     if(NEXT(index)) {
         NEXT(prev_index) = NEXT(index);
@@ -595,8 +597,7 @@ void index_extend(const tm_index_t index, const tm_blocks_t blocks,
     HEAP += blocks;
     if(tm_pool.last_index) NEXT(tm_pool.last_index) = index;
     tm_pool.last_index = index;
-    // TODO: if first
-
+    if(!tm_pool.first_index) tm_pool.first_index = index;
     if(filled){
         FILLED_SET(index);
         tm_pool.filled_blocks += blocks;
@@ -663,7 +664,7 @@ tm_index_t      freed_count_bin(uint8_t bin, tm_size_t *size, bool pnt){
     if(!index) return 0;
     assert(FREE_PREV(index)== 0);
     while(index){
-        tm_debug("loc=%u, blocks=%u", LOCATION(index), POOL_BLOCKS);
+        /*tm_debug("loc=%u, blocks=%u", LOCATION(index), POOL_BLOCKS);*/
         assert(LOCATION(index) < POOL_BLOCKS);
         assert(POINTS(index));
         assert(!FILLED(index));
@@ -699,20 +700,40 @@ bool            freed_isin(const tm_index_t index){
 }
 
 bool                indexes_isvalid(){
-    tm_index_t i;
-    for(i=1; i<TM_MAX_POOL_PTRS; i++){
-        if((!POINTS(i)) && FILLED(i)){
-            tm_debug("[ERROR] index=%u is filled but doesn't point", i);
-            index_print(i);
+    tm_blocks_t filled = 0, freed=0;
+    tm_index_t ptrs_filled = 0, ptrs_freed = 0;
+    tm_index_t index;
+    bool flast = false, ffirst = false;
+    for(index=1; index<TM_MAX_POOL_PTRS; index++){  // do a basic complete check on ALL indexes
+        if((!POINTS(index)) && FILLED(index)){
+            tm_debug("[ERROR] index=%u is filled but doesn't point", index);
+            index_print(index);
             return false;
         }
-        if(POINTS(i) && (!FILLED(i))){
-            if(!freed_isin(i)){
-                tm_debug("[ERROR] index=%u is freed but isn't in freed array", i);
-                index_print(i);
+        if(POINTS(index) && (!FILLED(index))){
+            if(!freed_isin(index)){
+                tm_debug("[ERROR] index=%u is freed but isn't in freed array", index);
+                index_print(index);
                 return false;
             }
         }
+        if(!NEXT(index)){
+            assert(!flast);
+            assert(tm_pool.last_index == index);
+            flast = true;
+        }
+        if(tm_pool.first_index == index){
+            assert(!ffirst);
+            ffirst = true;
+        }
+    }
+    // Make sure we found the first and last index (or no indexes exist)
+    if(PTRS_USED) assert(flast && flast);
+    else          assert(!(tm_pool.last_index || tm_pool.first_index));
+
+    if(!freed_isvalid()){
+        tm_debug("[ERROR] general freed check failed");
+        return false;
     }
     return true;
 }
