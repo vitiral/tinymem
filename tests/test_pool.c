@@ -1,6 +1,5 @@
 #include "minunit.h"
-#include "tm_pool.h"
-#include "tm_tools.h"
+#include "tinymem.h"
 #include "time.h"
 
 #define TABLE_STANDIN NULL

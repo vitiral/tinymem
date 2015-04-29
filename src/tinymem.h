@@ -1,5 +1,5 @@
-#ifndef __tinymem_pool_h
-#define __tinymem_pool_h
+#ifndef __tinymem_h
+#define __tinymem_h
 #include <stdlib.h>
 #include <stdint.h>
 #include <stdbool.h>
@@ -29,7 +29,6 @@
 
 typedef uint16_t        tm_index_t;
 typedef uint32_t        tm_size_t;
-typedef uint16_t        tm_blocks_t;
 typedef uint8_t         tm_status_type;
 
 
@@ -101,6 +100,11 @@ inline void*        tm_void_p(const tm_index_t index);
 /*      For Debug and Test                                                   */
 tm_index_t          tm_freed_count(tm_size_t *size);
 tm_index_t          tm_freed_print();
+
+char*               test_tm_pool_new();
+char*               test_tm_pool_alloc();
+char*               test_tm_free_basic();
+char*               test_tm_pool_realloc();
 
 #endif
 /** @} */

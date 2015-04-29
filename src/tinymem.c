@@ -1,4 +1,4 @@
-#include "tm_pool.h"
+#include "tinymem.h"
 
 //#if (TM_POOL_SIZE % sizeof(free_block))
 //#error "Invalid pool size, must be divisible by free_block"
@@ -8,6 +8,7 @@
 //#error "Invalid pool ptrs size, must be divisible by int"
 //#endif
 
+typedef uint16_t        tm_blocks_t;
 
 #define CEILING(x, y)           (((x) % (y)) ? (x)/(y) + 1 : (x)/(y))
 
