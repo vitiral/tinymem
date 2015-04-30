@@ -615,6 +615,15 @@ void index_extend(const tm_index_t index, const tm_blocks_t blocks,
 
 #define PRIME       (65599)
 
+void                pool_print(){
+    printf("## Pool (status=%x):\n", tm_pool.status);
+    printf("    avail mem:  heap=%-7u       total=%-7u\n", HEAP_LEFT * BLOCK_SIZE, BYTES_LEFT);
+    printf("    avail ptrs: total=%-7u\n", PTRS_LEFT);
+    printf("    blocks:     filled=%-7u     freed=%-7u\n", tm_pool.filled_blocks, tm_pool.freed_blocks);
+    printf("    pointers:   filled=%-7u     freed=%-7u\n", tm_pool.ptrs_filled, tm_pool.ptrs_freed);
+    printf("    first index=%-5u, last_index=%-5u", tm_pool.first_index, tm_pool.last_index);
+}
+
 void                freed_print(){
     freed_full_print(false);
 }
@@ -701,7 +710,7 @@ bool            freed_isin(const tm_index_t index){
 
 bool                indexes_isvalid(){
     tm_blocks_t filled = 0, freed=0;
-    tm_index_t ptrs_filled = 0, ptrs_freed = 0;
+    tm_index_t ptrs_filled = 1, ptrs_freed = 0;
     tm_index_t index;
     bool flast = false, ffirst = false;
     // do a basic complete check on ALL indexes
@@ -720,28 +729,48 @@ bool                indexes_isvalid(){
         }
         if(POINTS(index)){
             if(!NEXT(index)){
-                assert(!flast);
-                assert(tm_pool.last_index == index);
-                flast = true;
+                assert(!flast); assert(tm_pool.last_index == index); flast = true;
+            } if(tm_pool.first_index == index){
+                assert(!ffirst); ffirst = true;
             }
-            if(tm_pool.first_index == index){
-                assert(!ffirst);
-                ffirst = true;
-            }
-        }
-        else{
-            assert(tm_pool.last_index != index);
-            assert(tm_pool.first_index != index);
+            if(FILLED(index))   {filled+=BLOCKS(index); ptrs_filled++;}
+            else                {freed+=BLOCKS(index); ptrs_freed++;}
+        } else{
+            assert(tm_pool.last_index != index); assert(tm_pool.first_index != index);
         }
     }
     // Make sure we found the first and last index (or no indexes exist)
     if(PTRS_USED > 1)   assert(flast && ffirst);
     else                assert(!(tm_pool.last_index || tm_pool.first_index));
 
-    if(!freed_isvalid()){
-        tm_debug("[ERROR] general freed check failed");
-        return false;
+    // check that we have proper count of filled and freed
+    if((filled != tm_pool.filled_blocks) || (freed != tm_pool.freed_blocks)){
+        tm_debug("filled and/or freed blocks don't match count filled=%u, freed=%u", filled, freed);
+        pool_print();
+        return 0;
+    } if((ptrs_filled != tm_pool.ptrs_filled) || (ptrs_freed != tm_pool.ptrs_freed)){
+        tm_debug("filled and/or freed ptrs don't match count filled_p=%u, freed_p=%u", ptrs_filled, ptrs_freed);
+        pool_print();
+        return 0;
     }
+
+    index = tm_pool.first_index;
+    while(index){
+        if(FILLED(index))   {filled+=BLOCKS(index); ptrs_filled++;}
+        else                {freed+=BLOCKS(index); ptrs_freed++;}
+        index = NEXT(index);
+    }
+    if((filled != tm_pool.filled_blocks) || (freed != tm_pool.freed_blocks)){
+        tm_debug("filled and/or freed blocks don't match count 2: filled=%u, freed=%u", filled, freed);
+        pool_print();
+        return 0;
+    } if((ptrs_filled != tm_pool.ptrs_filled) || (ptrs_freed != tm_pool.ptrs_freed)){
+        tm_debug("filled and/or freed ptrs don't match count 2: filled_p=%u, freed_p=%u", ptrs_filled, ptrs_freed);
+        pool_print();
+        return 0;
+    }
+
+    if(!freed_isvalid()){tm_debug("[ERROR] general freed check failed"); return false;}
     return true;
 }
 
