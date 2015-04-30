@@ -300,11 +300,11 @@ bool            tm_defrag(){
     while(NEXT(tm_pool.defrag_index)){
         if(!FILLED(tm_pool.defrag_index)){
             if(!FILLED(NEXT(tm_pool.defrag_index))){
-                printf("  joining above\n", tm_pool.defrag_index);
+                /*printf("  joining above\n", tm_pool.defrag_index);*/
                 index_join(tm_pool.defrag_index, NEXT(tm_pool.defrag_index));
             }
 
-            printf("### Defrag: loop=%-11u", i); index_print(tm_pool.defrag_index);
+            /*printf("### Defrag: loop=%-11u", i); index_print(tm_pool.defrag_index);*/
             assert(FILLED(NEXT(tm_pool.defrag_index)));
             blocks = BLOCKS(NEXT(tm_pool.defrag_index));        // store size of actual data
             location = LOCATION(NEXT(tm_pool.defrag_index));    // location of actual data
@@ -316,10 +316,10 @@ bool            tm_defrag(){
             tm_pool.ptrs_freed--, tm_pool.freed_blocks-=BLOCKS(tm_pool.defrag_index);
 
             // Do an odd join, where the locations are just equal
-            printf("  New bef join  :           "); index_print(NEXT(tm_pool.defrag_index));
+            /*printf("  New bef join  :           "); index_print(NEXT(tm_pool.defrag_index));*/
             LOCATION(NEXT(tm_pool.defrag_index)) = LOCATION(tm_pool.defrag_index);
-            printf("  After odd join:           "); index_print(tm_pool.defrag_index);
-            printf("  New after join:           "); index_print(NEXT(tm_pool.defrag_index));
+            /*printf("  After odd join:           "); index_print(tm_pool.defrag_index);*/
+            /*printf("  New after join:           "); index_print(NEXT(tm_pool.defrag_index));*/
 
             // Now remove the index. Note that the size is == 0
             //      Also note that even though it was removed, it's NEXT and LOCATION
@@ -329,21 +329,21 @@ bool            tm_defrag(){
 
             memmove(LOC_VOID(LOCATION(prev_index)),
                     LOC_VOID(location), ((tm_size_t)blocks) * BLOCK_SIZE);
-            printf("  New index, before split:  "); index_print(prev_index);
+            /*printf("  New index, before split:  "); index_print(prev_index);*/
             if(!index_split(NEXT(tm_pool.defrag_index), blocks)){
                 assert(0); exit(-1);
             }
             assert(pool_isvalid());
-            printf("  New index, after split:   "); index_print(prev_index);
+            /*printf("  New index, after split:   "); index_print(prev_index);*/
 
-            tm_debug("blocks=%u, freespace=%u, %u==%u", blocks, BLOCKS(NEXT(prev_index)),
-                     used, tm_pool.filled_blocks);
-            tm_debug("%u==%u", BLOCKS(prev_index), blocks);
+            /*tm_debug("blocks=%u, freespace=%u, %u==%u", blocks, BLOCKS(NEXT(prev_index)),*/
+                     /*used, tm_pool.filled_blocks);*/
+            /*tm_debug("%u==%u", BLOCKS(prev_index), blocks);*/
             assert(BLOCKS(prev_index) == blocks);
 
             tm_pool.defrag_index = NEXT(prev_index);
 
-            tm_debug("%u==%u", used, tm_pool.filled_blocks);
+            /*tm_debug("%u==%u", used, tm_pool.filled_blocks);*/
             assert(!FILLED(tm_pool.defrag_index));
 
         } else{
@@ -357,9 +357,9 @@ bool            tm_defrag(){
     }
 done:
     if(!FILLED(tm_pool.defrag_index)){
-        tm_debug("removing last index");
-        printf("index       :"); index_print(tm_pool.defrag_index);
-        printf("prev_index  :"); index_print(prev_index);
+        /*tm_debug("removing last index");*/
+        /*printf("index       :"); index_print(tm_pool.defrag_index);*/
+        /*printf("prev_index  :"); index_print(prev_index);*/
         index_remove(tm_pool.defrag_index, prev_index);
     }
     STATUS_CLEAR(TM_DEFRAG_IP);
@@ -532,12 +532,12 @@ found:
             assert(!FILLED(index));
             assert(POINTS(index));
             freed_remove(index);
+            FILLED_SET(index);
             // Mark the index as filled
             tm_pool.filled_blocks += BLOCKS(index);
             tm_pool.freed_blocks -= BLOCKS(index);
             tm_pool.ptrs_filled++;
             tm_pool.ptrs_freed--;
-            FILLED_SET(index);
             return index;
         }
     }
@@ -553,12 +553,10 @@ void index_join(tm_index_t index, tm_index_t with_index){
     tm_index_t temp;
     do{
         assert(!FILLED(with_index));
+        if(!FILLED(index)) freed_remove(index); // index has to be rebinned
         // Remove and combine the index
         index_remove(with_index, index);
-        if(!FILLED(index)){ // rebin the index, as it has grown
-            freed_remove(index);
-            freed_insert(index);
-        }
+        if(!FILLED(index)) freed_insert(index); // rebin the index
         with_index = NEXT(index);
         assert(LOCATION(index) < POOL_BLOCKS);
         assert(LOCATION(with_index) < POOL_BLOCKS);
@@ -727,10 +725,13 @@ tm_index_t      freed_count_print(tm_size_t *size, bool pnt){
 }
 
 inline void         index_print(tm_index_t index){
-    printf("index %-5u (%u, %u): blocks=%-7u, loc=%-7u, next=%-5u, f/l=(%u, %u)\n", index,
+    printf("index %-5u(%u,%u):bl=%-4u, l=%-5u, n=%-5u, f/l=%u,%u", index,
            !!POINTS(index), !!FILLED(index),
            BLOCKS(index), LOCATION(index), NEXT(index),
            tm_pool.first_index == index, tm_pool.last_index == index);
+    if(FILLED(index))       printf("\n");
+    else                    printf(" free:b=%u p=%u n=%u\n", freed_bin(BLOCKS(index)),
+                                   FREE_PREV(index), FREE_NEXT(index));
 }
 
 tm_index_t      freed_count(tm_size_t *size){
@@ -785,6 +786,9 @@ bool                pool_isvalid(){
     tm_index_t ptrs_filled = 1, ptrs_freed = 0;
     tm_index_t index;
     bool flast = false, ffirst = false;  // found first/last
+    bool freed_first[FREED_BINS] = {0};  // found freed first bin
+    bool freed_last[FREED_BINS] = {0};   // found freed last bin
+    uint8_t bin;
 
     assert(HEAP <= POOL_BLOCKS); assert(BLOCKS_LEFT <= POOL_BLOCKS);
     assert(PTRS_LEFT < TM_MAX_POOL_PTRS);
@@ -807,12 +811,28 @@ bool                pool_isvalid(){
             if(FILLED(index))   {filled+=BLOCKS(index); ptrs_filled++;}
             else{
                 freed+=BLOCKS(index); ptrs_freed++;
+                // Check to make sure it is in the correct areas
                 assert(FREE_NEXT(index) < TM_MAX_POOL_PTRS);
                 assert(FREE_PREV(index) < TM_MAX_POOL_PTRS);
                 if(!freed_isin(index)){
                     tm_debug("[ERROR] index=%u is freed but isn't in freed array", index);
                     index_print(index);
                     return false;
+                }
+                // Make sure the freed arrays have one first and one last
+                bin = freed_bin(BLOCKS(index));
+                assert(freed_isin(index));
+                if(!FREE_PREV(index)){
+                    if((tm_pool.freed[bin] != index) || freed_first[bin]){
+                        tm_debug("bin=%u, %u==%u", bin, tm_pool.freed[bin], index);
+                        tm_debug("[ERROR] index=%u has no prev but isn't first bin", index);
+                        index_print(index);
+                        return 0;
+                    }
+                    freed_first[bin] = true;
+                }
+                if(!FREE_NEXT(index)){
+                    assert(!freed_last[bin]); freed_last[bin] = true;
                 }
             }
         } else{
@@ -822,6 +842,12 @@ bool                pool_isvalid(){
     // Make sure we found the first and last index (or no indexes exist)
     if(PTRS_USED > 1)   assert(flast && ffirst);
     else                assert(!(tm_pool.last_index || tm_pool.first_index));
+
+    // Make sure we found all the freed values
+    for(bin=0; bin<FREED_BINS; bin++){
+        if(tm_pool.freed[bin])  assert(freed_first[bin] && freed_last[bin]);
+        else                    assert(!(freed_first[bin] || freed_last[bin]));
+    }
 
     // check that we have proper count of filled and freed
     if((filled != tm_pool.filled_blocks) || (freed != tm_pool.freed_blocks)){
@@ -1093,7 +1119,7 @@ char *test_tinymem(){
     testing = true;
     srand(777);
     uint32_t i, j, loop;
-    uint32_t defrags = 0;   // how many defrags have been done
+    uint32_t defrags = 0, fills=0, frees=0;   // record how many operations have been done
     tm_index_t indexes[TEST_INDEXES] = {0};
     tm_size_t used = 0, size;
     uint8_t mod = 125;
@@ -1105,23 +1131,26 @@ char *test_tinymem(){
             if(indexes[i]){
                 // index is filled, free it sometimes
                 if(!(rand() % FREE_AMOUNT)){
-                    tm_debug("freeing i=%u, loop=%u, index=%u", i, loop, indexes[i]);
+                    printf("freeing i=%u,l=%u:", i, loop); index_print(indexes[i]);
                     used -= BLOCKS(indexes[i]);
+                    if(i==206 && loop==2){
+                        tm_debug("here");
+                        /*__asm__("int $3");*/
+                    }
                     tfree(indexes[i]);
                     mu_assert(used == tm_pool.filled_blocks);
-                    indexes[i] = 0;
+                    printf("freed: "); index_print(indexes[i]);
+                    frees++;
                 }
             } else{
                 // index is free. decide whether to allocate large or small
                 size = (rand() % SIZE_DISTRIBUTION) ? (rand() % SMALL_SIZE) : (rand() % LARGE_SIZE);
                 size++;
                 if(size <= BYTES_LEFT){
-                    if(i==19 && loop==0){
-                        tm_debug("here");
-                        /*__asm__("int $3");*/
-                    }
-                    printf("filling i=%u, loop=%u\n", i, loop);
+                    printf("filling i=%u,l=%u", i, loop);
+                    index_print(indexes[i]);
                     indexes[i] = talloc(size);
+                    fills++;
                     mu_assert(indexes[i]);
                     tm_debug("%u==%u", used, tm_pool.filled_blocks);
                     used+=ALIGN_BLOCKS(size); mu_assert(used == tm_pool.filled_blocks);
@@ -1133,8 +1162,9 @@ char *test_tinymem(){
                 printf("!! Defrag has been done"); defrags++;
             }
 
-            printf("checking i=%u, loop=%u, defrags=%u, ", i, loop, defrags);
+            printf("checking i=%u,l=%u,ffd=(%u,%u,%u):", i, loop, fills, frees, defrags);
             index_print(indexes[i]);
+            if(!FILLED(indexes[i])) indexes[i] = 0;
             mu_assert(pool_isvalid());
             for(j=0; j<TEST_INDEXES; j++){
                 if(indexes[j]) mu_assert(check_index(indexes[j]));
