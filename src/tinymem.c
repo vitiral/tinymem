@@ -283,11 +283,13 @@ void            tm_free(const tm_index_t index){
 /*---------------------------------------------------------------------------*/
 bool            tm_defrag(){
     // TODO: implement re-entrant threaded
+#ifndef NDEBUG
     tm_index_t i = 0;
+    tm_blocks_t used = tm_pool.filled_blocks;
+#endif
     tm_blocks_t blocks;
     tm_blocks_t location;
     tm_index_t prev_index = 0;
-    tm_blocks_t used = tm_pool.filled_blocks;
     if(!STATUS(TM_DEFRAG_IP)){
         tm_pool.defrag_index = tm_pool.first_index;
         STATUS_CLEAR(TM_ANY_DEFRAG);
@@ -295,9 +297,8 @@ bool            tm_defrag(){
     }
     if(!tm_pool.defrag_index) goto done;
     while(NEXT(tm_pool.defrag_index)){
-        printf("defrag loop=%u\n", i); i++;
         if(!FILLED(tm_pool.defrag_index)){
-            printf("  not filled index=%u\n", tm_pool.defrag_index);
+            printf("loop=%u,  not filled index=%u\n", i, tm_pool.defrag_index);
             if(!FILLED(NEXT(tm_pool.defrag_index))){
                 printf("  joining above\n", tm_pool.defrag_index);
                 index_join(tm_pool.defrag_index, NEXT(tm_pool.defrag_index));
@@ -305,16 +306,28 @@ bool            tm_defrag(){
             assert(FILLED(NEXT(tm_pool.defrag_index)));
             blocks = BLOCKS(NEXT(tm_pool.defrag_index));        // store size of actual data
             location = LOCATION(NEXT(tm_pool.defrag_index));    // location of actual data
-            // Join the indexes and then split it to be the proper size
-            index_join(tm_pool.defrag_index, NEXT(tm_pool.defrag_index));
+
+            // Make index "filled", we will split it up later
+            freed_remove(tm_pool.defrag_index);
+            FILLED_SET(tm_pool.defrag_index);
+            tm_pool.ptrs_filled++, tm_pool.filled_blocks+=BLOCKS(tm_pool.defrag_index);
+            tm_pool.ptrs_freed--, tm_pool.freed_blocks-=BLOCKS(tm_pool.defrag_index);
+
+            // Remove the next index, this also joins it with the current index.
+            // Remember that the data is at "location" of size "blocks"
+            index_remove(NEXT(tm_pool.defrag_index), tm_pool.defrag_index);
             memmove(LOC_VOID(LOCATION(tm_pool.defrag_index)),
                     LOC_VOID(location), blocks);
             index_split(tm_pool.defrag_index, blocks);
+
+            tm_debug("blocks=%u, %u==%u", blocks, used, tm_pool.filled_blocks);
+            assert(used == tm_pool.filled_blocks);
+            assert(BLOCKS(tm_pool.defrag_index) == blocks);
         }
         prev_index = tm_pool.defrag_index;
         tm_pool.defrag_index = NEXT(tm_pool.defrag_index);
         assert(prev_index != tm_pool.defrag_index);
-        assert(used == tm_pool.filled_blocks);
+        assert((i++, used == tm_pool.filled_blocks));
     }
 done:
     if(!FILLED(tm_pool.defrag_index)) index_remove(tm_pool.defrag_index, prev_index);
@@ -450,6 +463,7 @@ inline void     freed_remove(const tm_index_t index){
 inline void     freed_insert(const tm_index_t index){
     // Insert the index onto the correct freed bin
     //      (inserts at position == 0)
+    // Does not do ANY other record keeping (no adding ptrs, blocks, etc)
     uint8_t bin = freed_bin(BLOCKS(index));
     assert(!FILLED(index));
     *free_p(index) = (free_block){.next=tm_pool.freed[bin], .prev=0};
@@ -501,24 +515,7 @@ void index_join(tm_index_t index, tm_index_t with_index){
     // join index with_index. with_index will be removed
     tm_index_t temp;
     do{
-        if(FILLED(index)){      // normal case (non-defrag). Grow the index
-            assert(!FILLED(with_index));
-            tm_pool.filled_blocks += BLOCKS(with_index);
-            tm_pool.freed_blocks -= BLOCKS(with_index);
-        } else if(FILLED(with_index)){
-            // used during defrag, invalid otherwise
-            // (data was already moved from with_index->index)
-            assert(!FILLED(index));
-            freed_remove(index);    // very important to remove first so it has correct bin
-            FILLED_SET(index);      // see defrag operation, index is actually filled
-            tm_pool.filled_blocks += BLOCKS(index);
-            tm_pool.freed_blocks -= BLOCKS(index);
-        } else{
-            assert(0);
-        }
-        if(!FILLED(index)){ // rebin the index, as it will grow
-            freed_remove(index); // size will change so we have to remove it and rebin it after
-        }
+        assert(!FILLED(with_index));
         // Remove and combine the index
         index_remove(with_index, index);
         if(!FILLED(index)){ // rebin the index, as it has grown
@@ -532,6 +529,7 @@ void index_join(tm_index_t index, tm_index_t with_index){
 }
 
 bool index_split(const tm_index_t index, const tm_blocks_t blocks){
+    // TODO: accept an index to use instead of finding a new one
     // split an index so the index becomes size blocks. Automatically creates a new freed
     //      index to store the new free data
     //      returns true on success, false on failure
@@ -552,13 +550,17 @@ bool index_split(const tm_index_t index, const tm_blocks_t blocks){
     POINTS_SET(new_index);
     assert(!FILLED(new_index));
 
+    // It is important that this comes AFTER joining indexes (if joining at all)
+    //      as the join updates the sizes correctly.
+    //      It must also happen BEFORE setting the new size settings
     if(FILLED(index)){
         tm_pool.freed_blocks += BLOCKS(index) - blocks;
         tm_pool.filled_blocks -= BLOCKS(index) - blocks;
     }
+
     tm_pool.ptrs_freed++;
     tm_pool.pointers[new_index] = (poolptr) {.loc = LOCATION(index) + blocks,
-                                           .next = NEXT(index)};
+                                             .next = NEXT(index)};
     NEXT(index) = new_index;
 
     // mark changes
@@ -572,14 +574,31 @@ void index_remove(const tm_index_t index, const tm_index_t prev_index){
     //      from end (to combine heap).
     //      This function also combines the indexes (NEXT(prev_index) = NEXT(index))
     //  Update information
-    if(!FILLED(index)){
-        freed_remove(index);
-        tm_pool.freed_blocks -= BLOCKS(index);
-        tm_pool.ptrs_freed--;
-    } else{
-        assert(!freed_isin(index));
-        tm_pool.filled_blocks -= BLOCKS(index);
-        tm_pool.ptrs_filled--;
+    // possibilities:
+    //      both are free:              this happens when joining free indexes
+    //      prev filled, index free:    this happens for realloc and all the time
+    //      prev free, index filled:    this should only happen during defrag
+    //      both filled:                this should never happen
+    //
+    //
+    //
+    switch(((FILLED(prev_index) ? 1:0) << 1) + (FILLED(index) ? 1:0)){
+        case 0b00:  // merging two free values
+            assert(freed_isin(index));
+            tm_pool.ptrs_freed--;
+            break;
+        case 0b10:  // growing prev_index "up"
+            freed_remove(index);
+            tm_pool.freed_blocks -= BLOCKS(index);
+            tm_pool.filled_blocks += BLOCKS(index);
+            tm_pool.ptrs_freed--;
+            break;
+        case 0b11:  // combining two filled indexes, used ONLY in defrag
+            assert(STATUS(TM_DEFRAG_IP));  // TODO: have a better way to check when threading
+            tm_pool.ptrs_filled--;
+            break;
+        default:
+            assert(0);
     }
 
     if(index == tm_pool.first_index) tm_pool.first_index = NEXT(index);
@@ -589,7 +608,8 @@ void index_remove(const tm_index_t index, const tm_index_t prev_index){
     } else{ // this is the last index
         assert(tm_pool.last_index == index);
         tm_pool.last_index = prev_index;
-        if(prev_index) NEXT(prev_index) = 0;
+        if(prev_index)  NEXT(prev_index) = 0;
+        else            tm_pool.first_index = 0;
         HEAP = LOCATION(index);
     }
     FILLED_CLEAR(index);
