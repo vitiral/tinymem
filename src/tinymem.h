@@ -4,6 +4,7 @@
 #include <stdio.h>
 #include <stdint.h>
 #include <stdbool.h>
+#include <string.h>     // for memmove
 #undef NDEBUG
 #include "tinymem_platform.h"
 #include <assert.h>
