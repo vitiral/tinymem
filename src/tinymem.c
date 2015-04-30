@@ -298,11 +298,12 @@ bool            tm_defrag(){
     if(!tm_pool.defrag_index) goto done;
     while(NEXT(tm_pool.defrag_index)){
         if(!FILLED(tm_pool.defrag_index)){
-            printf("loop=%u,  not filled index=%u\n", i, tm_pool.defrag_index);
             if(!FILLED(NEXT(tm_pool.defrag_index))){
                 printf("  joining above\n", tm_pool.defrag_index);
                 index_join(tm_pool.defrag_index, NEXT(tm_pool.defrag_index));
             }
+
+            printf("### Defrag: loop=%-11u", i); index_print(tm_pool.defrag_index);
             assert(FILLED(NEXT(tm_pool.defrag_index)));
             blocks = BLOCKS(NEXT(tm_pool.defrag_index));        // store size of actual data
             location = LOCATION(NEXT(tm_pool.defrag_index));    // location of actual data
@@ -313,19 +314,53 @@ bool            tm_defrag(){
             tm_pool.ptrs_filled++, tm_pool.filled_blocks+=BLOCKS(tm_pool.defrag_index);
             tm_pool.ptrs_freed--, tm_pool.freed_blocks-=BLOCKS(tm_pool.defrag_index);
 
+            // Do an odd join, where the locations are just equal
+            printf("  New bef join  :           "); index_print(NEXT(tm_pool.defrag_index));
+            LOCATION(NEXT(tm_pool.defrag_index)) = LOCATION(tm_pool.defrag_index);
+            printf("  After odd join:           "); index_print(tm_pool.defrag_index);
+            printf("  New after join:           "); index_print(NEXT(tm_pool.defrag_index));
+
+            // Now remove the index. Note that the size is == 0
+            //      Also note that even though it was removed, it's NEXT and LOCATION
+            //      are still valid (not changed in remove index)
+            index_remove(tm_pool.defrag_index, prev_index);
+            prev_index = NEXT(tm_pool.defrag_index);  // defrag_index was removed
+
+            memmove(LOC_VOID(LOCATION(tm_pool.defrag_index)),
+                    LOC_VOID(location), blocks);
+            printf("  New index, before split:  "); index_print(prev_index);
+            if(!index_split(NEXT(tm_pool.defrag_index), blocks)){
+                assert(0); exit(-1);
+            }
+            printf("  New index, after split:   "); index_print(prev_index);
+
+            tm_debug("blocks=%u, freespace=%u, %u==%u", blocks, BLOCKS(NEXT(prev_index)),
+                     used, tm_pool.filled_blocks);
+            tm_debug("%u==%u", BLOCKS(prev_index), blocks);
+            assert(BLOCKS(prev_index) == blocks);
+
+            tm_pool.defrag_index = NEXT(prev_index);
+
+            tm_debug("%u==%u", used, tm_pool.filled_blocks);
+            assert(used == tm_pool.filled_blocks);
+            assert(!FILLED(tm_pool.defrag_index));
+
+#if 0
             // Remove the next index, this also joins it with the current index.
             // Remember that the data is at "location" of size "blocks"
+            prev_index = NEXT(tm_pool.defrag_index);
             index_remove(NEXT(tm_pool.defrag_index), tm_pool.defrag_index);
+
+            // Move the data into the index
             memmove(LOC_VOID(LOCATION(tm_pool.defrag_index)),
                     LOC_VOID(location), blocks);
             index_split(tm_pool.defrag_index, blocks);
 
-            tm_debug("blocks=%u, %u==%u", blocks, used, tm_pool.filled_blocks);
-            assert(used == tm_pool.filled_blocks);
-            assert(BLOCKS(tm_pool.defrag_index) == blocks);
+#endif
+        } else{
+            prev_index = tm_pool.defrag_index;
+            tm_pool.defrag_index = NEXT(tm_pool.defrag_index);
         }
-        prev_index = tm_pool.defrag_index;
-        tm_pool.defrag_index = NEXT(tm_pool.defrag_index);
         assert(prev_index != tm_pool.defrag_index);
         assert((i++, used == tm_pool.filled_blocks));
     }
@@ -538,10 +573,8 @@ bool index_split(const tm_index_t index, const tm_blocks_t blocks){
     if(!FILLED(new_index)){
         // If next index is free, always join it first. This also frees up new_index to
         // use however we want!
-        tm_debug("joining");
         index_join(index, new_index);
     } else{
-        tm_debug("getting new index");
         new_index = find_index();
         if(!new_index) return false;
     }
@@ -573,6 +606,8 @@ void index_remove(const tm_index_t index, const tm_index_t prev_index){
     // Completely remove the index. Used for combining indexes and when defragging
     //      from end (to combine heap).
     //      This function also combines the indexes (NEXT(prev_index) = NEXT(index))
+    // Note: NEXT(index) and LOCATION(index) **must not change**. They are used by other code
+    //
     //  Update information
     // possibilities:
     //      both are free:              this happens when joining free indexes
@@ -686,8 +721,10 @@ tm_index_t      freed_count_print(tm_size_t *size, bool pnt){
 }
 
 inline void         index_print(tm_index_t index){
-    printf("index %-5u: size=%-7u, loc=%-7u, filled=%u, points=%u, left=%u\n", index, tm_sizeof(index),
-            LOCATION(index) * BLOCK_SIZE, !!FILLED(index), !!POINTS(index), BYTES_LEFT);
+    printf("index %-5u (%u, %u): blocks=%-7u, loc=%-7u, next=%u, f/l=(%u, %u)\n", index,
+           !!POINTS(index), !!FILLED(index),
+           BLOCKS(index), LOCATION(index), NEXT(index),
+           tm_pool.first_index == index, tm_pool.last_index == index);
 }
 
 tm_index_t      freed_count(tm_size_t *size){
