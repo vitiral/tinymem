@@ -24,6 +24,8 @@
 #define TM_DEFRAG_FULL_IP   (1<<2)  // A defrag is in progress
 #define TM_DEFRAG_FAST_IP   (1<<3)  // A defrag is in progress
 #define TM_MOVING           (1<<4)  // the memory manager is currently moving a block
+#define TM_DEFRAG_FULL_DONE (1<<5)  // this will be set after a full defrag has happend
+#define TM_DEFRAG_FAST_DONE (1<<6)  // this will be set after a fast defrag has happened.
 #define TM_ERROR            (1<<7)  // a memory manager internal error occurred
 #define TM_DEFRAG_IP        (TM_DEFRAG_FULL_IP | TM_DEFRAG_FAST_IP)             // defrag is in progress
 #define TM_ANY_DEFRAG       (TM_DEFRAG_FULL | TM_DEFRAG_FAST | TM_DEFRAG_IP)    // some defrag has been requested
