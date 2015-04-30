@@ -125,7 +125,7 @@ tm_index_t          freed_count(tm_size_t *size);
 tm_index_t          freed_count_bin(uint8_t bin, tm_size_t *size, bool pnt);
 bool                freed_isvalid();
 bool                freed_isin(const tm_index_t index);
-bool                indexes_isvalid();
+bool                pool_isvalid();
 void                fill_index(tm_index_t index);
 bool                check_index(tm_index_t index);
 
@@ -137,7 +137,8 @@ bool                check_index(tm_index_t index);
 #define BYTES_LEFT                  (BLOCKS_LEFT * BLOCK_SIZE)
 #define PTRS_USED                   (tm_pool.ptrs_filled + tm_pool.ptrs_freed)
 #define PTRS_LEFT                   (TM_MAX_POOL_PTRS - PTRS_USED)
-#define HEAP_LEFT                   (TM_POOL_SIZE - HEAP)
+#define HEAP_LEFT                   (POOL_BLOCKS - HEAP)
+#define HEAP_LEFT_BYTES             (HEAP_LEFT * BLOCK_SIZE)
 
 /**
  * \brief           Get, set or clear the status bit (0 or 1) of name
@@ -617,11 +618,11 @@ void index_extend(const tm_index_t index, const tm_blocks_t blocks,
 
 void                pool_print(){
     printf("## Pool (status=%x):\n", tm_pool.status);
-    printf("    avail mem:  heap=%-7u       total=%-7u\n", HEAP_LEFT * BLOCK_SIZE, BYTES_LEFT);
-    printf("    avail ptrs: total=%-7u\n", PTRS_LEFT);
-    printf("    blocks:     filled=%-7u     freed=%-7u\n", tm_pool.filled_blocks, tm_pool.freed_blocks);
-    printf("    pointers:   filled=%-7u     freed=%-7u\n", tm_pool.ptrs_filled, tm_pool.ptrs_freed);
-    printf("    first index=%-5u, last_index=%-5u", tm_pool.first_index, tm_pool.last_index);
+    printf("    mem blocks: heap=  %-7u     filled=%-7u  freed=%-7u     total=%-7u\n",
+            HEAP, tm_pool.filled_blocks, tm_pool.freed_blocks, POOL_BLOCKS);
+    printf("    avail ptrs: filled=  %-7u   freed= %-7u   used=%-7u,    total= %-7u\n",
+            tm_pool.ptrs_filled, tm_pool.ptrs_freed, PTRS_USED, TM_MAX_POOL_PTRS);
+    printf("    indexes   : first=%u, last=%u\n", tm_pool.first_index, tm_pool.last_index);
 }
 
 void                freed_print(){
@@ -708,11 +709,14 @@ bool            freed_isin(const tm_index_t index){
     return false;
 }
 
-bool                indexes_isvalid(){
+bool                pool_isvalid(){
     tm_blocks_t filled = 0, freed=0;
     tm_index_t ptrs_filled = 1, ptrs_freed = 0;
     tm_index_t index;
-    bool flast = false, ffirst = false;
+    bool flast = false, ffirst = false;  // found first/last
+
+    assert(HEAP <= POOL_BLOCKS); assert(BLOCKS_LEFT <= POOL_BLOCKS);
+    assert(PTRS_LEFT < TM_MAX_POOL_PTRS);
     // do a basic complete check on ALL indexes
     for(index=1; index<TM_MAX_POOL_PTRS; index++){
         if((!POINTS(index)) && FILLED(index)){
@@ -754,6 +758,7 @@ bool                indexes_isvalid(){
         return 0;
     }
 
+    filled=0, freed=0, ptrs_freed=0, ptrs_filled=1;
     index = tm_pool.first_index;
     while(index){
         if(FILLED(index))   {filled+=BLOCKS(index); ptrs_filled++;}
@@ -761,11 +766,11 @@ bool                indexes_isvalid(){
         index = NEXT(index);
     }
     if((filled != tm_pool.filled_blocks) || (freed != tm_pool.freed_blocks)){
-        tm_debug("filled and/or freed blocks don't match count 2: filled=%u, freed=%u", filled, freed);
+        tm_debug("2nd test: filled and/or freed blocks don't match count: filled=%u, freed=%u", filled, freed);
         pool_print();
         return 0;
     } if((ptrs_filled != tm_pool.ptrs_filled) || (ptrs_freed != tm_pool.ptrs_freed)){
-        tm_debug("filled and/or freed ptrs don't match count 2: filled_p=%u, freed_p=%u", ptrs_filled, ptrs_freed);
+        tm_debug("2nd test: filled and/or freed ptrs don't match count: filled_p=%u, freed_p=%u", ptrs_filled, ptrs_freed);
         pool_print();
         return 0;
     }
@@ -843,7 +848,7 @@ char *test_tm_pool_new(){
     tm_reset();
 
     mu_assert(HEAP == 0);
-    mu_assert(HEAP_LEFT == TM_POOL_SIZE);
+    mu_assert(HEAP_LEFT_BYTES == TM_POOL_SIZE);
 
     mu_assert(tm_pool.filled[0] == 1);
     mu_assert(tm_pool.points[0] == 1);
@@ -1007,7 +1012,7 @@ char *test_tinymem(){
         mu_assert(tm_pool.filled[j] == 0);
         mu_assert(tm_pool.points[j] == 0);
     }
-    mu_assert(indexes_isvalid());
+    mu_assert(pool_isvalid());
     for(j=0; j<TEST_INDEXES; j++) mu_assert(indexes[j] == 0);
     for(loop=0; loop<10; loop++){
         tm_debug("loop=%u", loop);
@@ -1026,7 +1031,7 @@ char *test_tinymem(){
                 size = (rand() % SIZE_DISTRIBUTION) ? (rand() % SMALL_SIZE) : (rand() % LARGE_SIZE);
                 size++;
                 if(size <= BYTES_LEFT){
-                    if(i==512 && loop==3){
+                    if(i==19 && loop==0){
                         tm_debug("here");
                         /*__asm__("int $3");*/
                     }
@@ -1034,11 +1039,12 @@ char *test_tinymem(){
                     indexes[i] = talloc(size);
                     mu_assert(indexes[i]);
                     used+=ALIGN_BLOCKS(size); mu_assert(used == tm_pool.filled_blocks);
+                    mu_assert(ALIGN_BLOCKS(size) == BLOCKS(indexes[i]));
                 }
             }
             printf("checking i=%u, loop=%u, ", i, loop);
             index_print(indexes[i]);
-            mu_assert(indexes_isvalid());
+            mu_assert(pool_isvalid());
             for(j=0; j<TEST_INDEXES; j++){
                 if(indexes[j]) mu_assert(check_index(indexes[j]));
             }
