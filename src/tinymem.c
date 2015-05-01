@@ -1,21 +1,73 @@
 #include "tinymem.h"
 
+#ifdef  TM_PRINT
+#define tm_debug(...)       do{printf("[DEBUG](%s,%u):", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n");}while(0)
 #define DBGprintf(...)      printf(__VA_ARGS__)
+#else
+#define tm_debug(...)       do{}while(0)
+#define DBGprintf(...)      do{}while(0)
+#endif
 
-/*#define tm_debug(...)       do{}while(0)*/
-/*#define DBGprintf(...)      do{}while(0)*/
+#ifdef TM_TEST
+#define TM_TOOLS
+#endif
 
-typedef uint16_t        tm_blocks_t;
+#ifndef TM_TOOLS
+#define assert(ignore)((void) 0)
+#endif
+
+/*---------------------------------------------------------------------------*/
+/*      Check pre-compiler errors                                            */
+
+#if     (UINT_MAX == UINT16_MAX)
+#define INTSIZE     2
+#elif   (UINT_MAX == UINT32_MAX)
+#define INTSIZE     4
+#elif   (UINT_MAX == UINT64_MAX)
+#define INTSIZE     8
+#endif
+
+#ifndef TM_BLOCK_SIZE       // user didn't set block size, use default
+    #define TM_BLOCK_TYPE           free_block
+    #define TM_BLOCK_SIZE           (TM_INDEX_SIZE * 2)
+#elif   (TM_BLOCK_SIZE == 2)
+    #define TM_BLOCK_TYPE           uint16_t
+#elif   (TM_BLOCK_SIZE == 4)
+    #define TM_BLOCK_TYPE           uint32_t
+#elif   (TM_BLOCK_SIZE == 8)
+    typedef struct {uint32_t values[2];} TM_BLOCK_TYPE;
+#elif   (TM_BLOCK_SIZE == 16)
+    typedef struct {uint32_t values[4];} TM_BLOCK_TYPE;
+#endif
+
+#if     (TM_BLOCK_SIZE < 2 * TM_INDEX_SIZE)
+#error  "block size must be 2 times bigger than index size"
+#endif
+
+#define TM_POOL_BLOCKS          (TM_POOL_SIZE / TM_BLOCK_SIZE)  // total blocks available
+
+#if     (TM_POOL_BLOCKS < 256)
+    typedef uint8_t         tm_blocks_t;
+#else
+    typedef uint16_t        tm_blocks_t;
+#endif
+
+#if TM_POOL_SIZE % (TM_BLOCK_SIZE)
+#error "Invalid pool size, must be divisible by free_block"
+#endif
+
+#if (TM_POOL_INDEXES % (8 * INTSIZE))
+#error "Invalid pool ptrs size, must be divisible by int"
+#endif
 
 /*---------------------------------------------------------------------------*/
 /**
  * \brief           poolptr is used by Pool to track memory location and size
  */
-// TODO: packed!
-typedef struct {
+TM_H_ATTPACKPRE typedef struct {
     tm_blocks_t loc;
     tm_index_t next;
-} poolptr;
+} TM_H_ATTPACKSUF poolptr;
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -23,25 +75,15 @@ typedef struct {
  *                  of all freed data
  */
 // TODO: packed!
-typedef struct {
+TM_H_ATTPACKPRE typedef struct {
     tm_index_t prev;
     tm_index_t next;
-} free_block;
-
-#if TM_POOL_SIZE % (4)
-#error "Invalid pool size, must be divisible by free_block"
-#endif
-
-/*#if (TM_MAX_POOL_PTRS % (8 * sizeof(int)))*/
-#if (TM_MAX_POOL_PTRS % (8 * 4))
-#error "Invalid pool ptrs size, must be divisible by int"
-#endif
+} TM_H_ATTPACKSUF free_block;
 
 
 #define CEILING(x, y)           (((x) % (y)) ? (x)/(y) + 1 : (x)/(y))
 
-#define POOL_BLOCKS         (TM_POOL_SIZE / sizeof(free_block))             // total blocks available
-#define MAX_BIT_INDEXES     (TM_MAX_POOL_PTRS / (8 * sizeof(int)))          // for filled/points
+#define MAX_BIT_INDEXES     (TM_POOL_INDEXES / (8 * sizeof(int)))          // for filled/points
 #define MAXUINT             ((unsigned int) 0xFFFFFFFFFFFFFFFF)
 #define INTBITS             (sizeof(int) * 8)                               // bits in an integer
 // Masks of an integer
@@ -51,9 +93,8 @@ typedef struct {
 #define FREED_BINS          (12)                                // bins to store freed values
 
 // data is aligned on blocks
-#define BLOCK_SIZE          (sizeof(free_block))                // size of a block in bytes
-#define ALIGN_BLOCKS(size)  CEILING(size, BLOCK_SIZE)           // get block value that can encompase size
-#define ALIGN_BYTES(size)   (ALIGN_BLOCKS(size) * BLOCK_SIZE)   // get value in bytes
+#define ALIGN_BLOCKS(size)  CEILING(size, TM_BLOCK_SIZE)           // get block value that can encompase size
+#define ALIGN_BYTES(size)   (ALIGN_BLOCKS(size) * TM_BLOCK_SIZE)   // get value in bytes
 
 
 /*---------------------------------------------------------------------------*/
@@ -83,10 +124,10 @@ typedef struct {
  *                  management
  */
 typedef struct {
-    free_block      pool[POOL_BLOCKS];           //!< Actual memory pool (very large)
+    TM_BLOCK_TYPE   pool[TM_POOL_BLOCKS];           //!< Actual memory pool (very large)
     unsigned int    filled[MAX_BIT_INDEXES];     //!< bit array of filled pointers (only used, not freed)
     unsigned int    points[MAX_BIT_INDEXES];     //!< bit array of used pointers (both used and freed)
-    poolptr         pointers[TM_MAX_POOL_PTRS];     //!< This is the index lookup location
+    poolptr         pointers[TM_POOL_INDEXES];     //!< This is the index lookup location
     tm_index_t      freed[FREED_BINS];           //!< binned storage of all freed indexes
     tm_blocks_t     filled_blocks;                //!< total amount of data allocated
     tm_blocks_t     freed_blocks;                 //!< total amount of data freed
@@ -99,11 +140,11 @@ typedef struct {
     tm_index_t      defrag_index;                //!< used during defrag
 } Pool;
 
-Pool tm_pool = tm_init();
+Pool tm_pool = tm_init();  // holds all allocations, deallocates and pretty much everything else
 
 
 /*---------------------------------------------------------------------------*/
-/*      Local Functions                                                      */
+/*      Local Functions Declarations                                         */
 
 tm_index_t      find_index();
 uint8_t         freed_bin(const tm_blocks_t blocks);
@@ -136,12 +177,12 @@ bool                check_index(tm_index_t index);
 /**
  * \brief           Access Pool Characteristics
  */
-#define BLOCKS_LEFT                 (POOL_BLOCKS - tm_pool.filled_blocks)
-#define BYTES_LEFT                  (BLOCKS_LEFT * BLOCK_SIZE)
+#define BLOCKS_LEFT                 (TM_POOL_BLOCKS - tm_pool.filled_blocks)
+#define BYTES_LEFT                  (BLOCKS_LEFT * TM_BLOCK_SIZE)
 #define PTRS_USED                   (tm_pool.ptrs_filled + tm_pool.ptrs_freed)
-#define PTRS_LEFT                   (TM_MAX_POOL_PTRS - PTRS_USED)
-#define HEAP_LEFT                   (POOL_BLOCKS - HEAP)
-#define HEAP_LEFT_BYTES             (HEAP_LEFT * BLOCK_SIZE)
+#define PTRS_LEFT                   (TM_POOL_INDEXES - PTRS_USED)
+#define HEAP_LEFT                   (TM_POOL_BLOCKS - HEAP)
+#define HEAP_LEFT_BYTES             (HEAP_LEFT * TM_BLOCK_SIZE)
 
 /**
  * \brief           Get, set or clear the status bit (0 or 1) of name
@@ -161,7 +202,7 @@ bool                check_index(tm_index_t index);
 #define FREE_PREV(index)            ((free_p(index))->prev)
 #define BLOCKS(index)               ((tm_blocks_t) (LOCATION(tm_pool.pointers[index].next) - \
                                         LOCATION(index)))       // sizeof index in blocks
-#define LOC_VOID(loc)               ((void*)tm_pool.pool + ((loc) * BLOCK_SIZE))
+#define LOC_VOID(loc)               ((void*)(tm_pool.pool + (loc)))
 
 /*---------------------------------------------------------------------------*/
 /**
@@ -190,13 +231,13 @@ bool                check_index(tm_index_t index);
 /*---------------------------------------------------------------------------*/
 /*      Global Function Definitions                                          */
 
-inline tm_size_t tm_sizeof(const tm_index_t index){
-    return BLOCKS(index) * BLOCK_SIZE;
+inline void tm_reset(){
+    tm_pool = tm_init();
 }
 
 /*---------------------------------------------------------------------------*/
-inline void tm_reset(){
-    tm_pool = tm_init();
+inline tm_size_t tm_sizeof(const tm_index_t index){
+    return BLOCKS(index) * TM_BLOCK_SIZE;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -261,7 +302,7 @@ tm_index_t      tm_realloc(tm_index_t index, tm_size_t size){
         if(!index_split(index, size)) return 0;
         return index;
     } else{  // grow data
-        new_index = tm_alloc(size * BLOCK_SIZE);
+        new_index = tm_alloc(size * TM_BLOCK_SIZE);
         if(!new_index) return 0;
         MEM_MOVE(new_index, index);
         tm_free(index);
@@ -272,7 +313,7 @@ tm_index_t      tm_realloc(tm_index_t index, tm_size_t size){
 /*---------------------------------------------------------------------------*/
 void            tm_free(const tm_index_t index){
     if(LOCATION(index) >= HEAP){assert(0); return;}
-    if((index >= TM_MAX_POOL_PTRS) || (!FILLED(index))){assert(0); return;}
+    if((index >= TM_POOL_INDEXES) || (!FILLED(index))){assert(0); return;}
     FILLED_CLEAR(index);
     tm_pool.filled_blocks -= BLOCKS(index);
     tm_pool.freed_blocks += BLOCKS(index);
@@ -284,6 +325,21 @@ void            tm_free(const tm_index_t index){
     if(!FILLED(NEXT(index))){
         index_join(index, NEXT(index));
     }
+}
+
+/*---------------------------------------------------------------------------*/
+bool            tm_valid(const tm_index_t index){
+    if(index >= TM_POOL_INDEXES)               return false;
+    if(LOCATION(index) >= TM_POOL_BLOCKS)          return false;
+    if((!POINTS(index)) || (!FILLED(index)))    return false;
+    return true;
+}
+
+/*---------------------------------------------------------------------------*/
+inline bool     tm_check(const tm_index_t index, const tm_size_t size){
+    if(!tm_valid(index))         return false;
+    if(tm_sizeof(index) != size) return false;
+    return true;
 }
 
 /*---------------------------------------------------------------------------*/
@@ -335,12 +391,12 @@ bool            tm_defrag(){
             index_remove(tm_pool.defrag_index, prev_index);
             prev_index = NEXT(tm_pool.defrag_index);  // defrag_index was removed
 
-            assert(LOCATION(prev_index) < POOL_BLOCKS);
-            assert(location < POOL_BLOCKS);
+            assert(LOCATION(prev_index) < TM_POOL_BLOCKS);
+            assert(location < TM_POOL_BLOCKS);
             /*tm_debug("location to=%u, from=%u, size=%u, end=%u, ", LOCATION(prev_index), location,*/
-                    /*blocks, POOL_BLOCKS);*/
+                    /*blocks, TM_POOL_BLOCKS);*/
             memmove(LOC_VOID(LOCATION(prev_index)),
-                    LOC_VOID(location), ((tm_size_t)blocks) * BLOCK_SIZE);
+                    LOC_VOID(location), ((tm_size_t)blocks) * TM_BLOCK_SIZE);
             /*DBGprintf("  New index, before split:  "); index_print(prev_index);*/
             if(!index_split(NEXT(tm_pool.defrag_index), blocks)){
                 assert(0); exit(-1);
@@ -364,7 +420,6 @@ bool            tm_defrag(){
         assert(prev_index != tm_pool.defrag_index);
         assert((i++, used == tm_pool.filled_blocks));
         assert(available == BLOCKS_LEFT);
-        /*assert(pool_isvalid());*/
     }
 done:
     if(!FILLED(tm_pool.defrag_index)){
@@ -380,7 +435,6 @@ done:
     assert(HEAP_LEFT - heap == freed);
     assert(tm_pool.freed_blocks == 0);
     assert(HEAP_LEFT == BLOCKS_LEFT);
-    assert(pool_isvalid());
     return 0;
 }
 
@@ -399,16 +453,11 @@ tm_index_t      find_index(){
             bits = tm_pool.points[tm_pool.find_index];
             if(bits != MAXUINT){
                 bit = 0;
-                /*tm_debug("bits=%x", bits);*/
-                /*tm_debug("lower mask=%x", LOWER_MASK);*/
-                /*tm_debug("operation=%x", bits & LOWER_MASK);*/
                 if((bits & LOWER_MASK) == LOWER_MASK){
                     // bits are in the second half
                     bit += sizeof(int)  * 8 / 2;
                     bits = bits >> (sizeof(int) * 8 / 2);
-                    /*tm_debug("ubits=%x", bits);*/
                 }
-                /*tm_debug("for bits=%x", bits);*/
                 for(i=0; i < sizeof(int) * 2; i++){
                     switch(bits & 0xF){
                         case 0b0000: case 0b0010: case 0b0100: case 0b0110:
@@ -426,12 +475,9 @@ tm_index_t      find_index(){
                     }
                     bit += 4;
                     bits = bits >> 4;
-                    /*tm_debug("breaking bits=%x", bits);*/
                 }
                 assert(0);
 found:
-                /*tm_debug("bit=%u, true_bits=%x", bit, tm_pool.points[tm_pool.find_index]);*/
-                /*tm_debug("index=%u", tm_pool.find_index * INTBITS + bit);*/
                 assert(!POINTS(tm_pool.find_index * INTBITS + bit));
                 assert(!FILLED(tm_pool.find_index * INTBITS + bit));
                 return tm_pool.find_index * INTBITS + bit;
@@ -496,7 +542,9 @@ inline void     freed_remove(const tm_index_t index){
     //      It is very important that this is called BEFORE any changes
     //      to the index's size
     assert(!FILLED(index));
+#ifdef TM_TESTS  // processor intensive
     assert(freed_isin(index));
+#endif
     if(FREE_PREV(index)){
         // if previous exists, move it's next as index's next
         assert(FREE_NEXT(FREE_PREV(index)) == index);
@@ -603,14 +651,15 @@ void index_remove(const tm_index_t index, const tm_index_t prev_index){
     switch(((FILLED(prev_index) ? 1:0) << 1) + (FILLED(index) ? 1:0)){
         case 0b00:  // merging two free values
             // TODO: this causes failure, find out why
-            /*assert(freed_isin(prev_index) && freed_isin(index));*/
             freed_remove(index);
             tm_pool.ptrs_freed--;  // no change in blocks, both are free
             // if index is last value, freed_blocks will be reduced
             if(!NEXT(index)) tm_pool.freed_blocks -= BLOCKS(index);
             break;
         case 0b10:  // growing prev_index "up"
+#ifdef TM_TESTS   // processor intensive
             assert(freed_isin(index));
+#endif
             freed_remove(index);
             tm_pool.freed_blocks -= BLOCKS(index); tm_pool.ptrs_freed--;
             // grow prev_index, unless index is last value
@@ -692,8 +741,18 @@ bool index_split(const tm_index_t index, const tm_blocks_t blocks){
 }
 
 
-/*---------------------------------------------------------------------------*/
-/*      For Debug and Test                                                   */
+#ifdef TM_TOOLS
+/*###########################################################################*/
+/**
+ * +------------------------------------------------------------+
+ * | XXXX XXXX XXXX     XXXXX XXX   XXXX XXXXX XXX  XX  X  XXXX |
+ * | X    X  X X  X       X   X     X      X    X   XX  X  X    |
+ * | XXX  X  X XXXX       X   XXX   XXXX   X    X   X X X  X XX |
+ * | X    X  X X X        X   X        X   X    X   X  XX  X  X |
+ * | X    XXXX X  X       X   XXX   XXXX   X   XXX  X   X  XXXX |
+ * +------------------------------------------------------------+
+ */
+
 
 #define PRIME       (65599)
 bool testing = false;
@@ -701,9 +760,9 @@ bool testing = false;
 void                pool_print(){
     DBGprintf("## Pool (status=%x):\n", tm_pool.status);
     DBGprintf("    mem blocks: heap=  %-7u     filled=%-7u  freed=%-7u     total=%-7u\n",
-            HEAP, tm_pool.filled_blocks, tm_pool.freed_blocks, POOL_BLOCKS);
+            HEAP, tm_pool.filled_blocks, tm_pool.freed_blocks, TM_POOL_BLOCKS);
     DBGprintf("    avail ptrs: filled=  %-7u   freed= %-7u   used=%-7u,    total= %-7u\n",
-            tm_pool.ptrs_filled, tm_pool.ptrs_freed, PTRS_USED, TM_MAX_POOL_PTRS);
+            tm_pool.ptrs_filled, tm_pool.ptrs_freed, PTRS_USED, TM_POOL_INDEXES);
     DBGprintf("    indexes   : first=%u, last=%u\n", tm_pool.first_index, tm_pool.last_index);
 }
 
@@ -735,7 +794,7 @@ tm_index_t      freed_count_print(tm_size_t *size, bool pnt){
         *size += size_get;
     }
     assert(count==tm_pool.ptrs_freed);
-    assert(*size==tm_pool.freed_blocks * BLOCK_SIZE);
+    assert(*size==tm_pool.freed_blocks * TM_BLOCK_SIZE);
     return count;
 }
 
@@ -761,8 +820,8 @@ tm_index_t      freed_count_bin(uint8_t bin, tm_size_t *size, bool pnt){
     if(!index) return 0;
     assert(FREE_PREV(index)== 0);
     while(index){
-        /*tm_debug("loc=%u, blocks=%u", LOCATION(index), POOL_BLOCKS);*/
-        assert(LOCATION(index) < POOL_BLOCKS);
+        /*tm_debug("loc=%u, blocks=%u", LOCATION(index), TM_POOL_BLOCKS);*/
+        assert(LOCATION(index) < TM_POOL_BLOCKS);
         assert(POINTS(index));
         assert(!FILLED(index));
         if(pnt) DBGprintf("        prev=%u, ind=%u, next=%u\n", FREE_PREV(index), index, FREE_NEXT(index));
@@ -796,8 +855,17 @@ bool            freed_isin(const tm_index_t index){
     return false;
 }
 
+
+/**
+ * \brief       Massive check of the entire pool to verify that it is "sane"
+ *
+ *              This single function will find 95% of errors with this library. The memory
+ *              manager stores data about itself, and this makes sure that all data is alligned
+ *              the way that it should be, that the freed array makes sense, etc.
+ *
+ * \return      true if valid, false otherwise
+ */
 bool                pool_isvalid(){
-    // Check pretty much every aspect of the pool to make sure it is completely valid
     tm_blocks_t filled = 0, freed=0;
     tm_index_t ptrs_filled = 1, ptrs_freed = 0;
     tm_index_t index;
@@ -806,20 +874,20 @@ bool                pool_isvalid(){
     bool freed_last[FREED_BINS] = {0};   // found freed last bin
     uint8_t bin;
 
-    assert(HEAP <= POOL_BLOCKS); assert(BLOCKS_LEFT <= POOL_BLOCKS);
-    assert(PTRS_LEFT < TM_MAX_POOL_PTRS);
+    assert(HEAP <= TM_POOL_BLOCKS); assert(BLOCKS_LEFT <= TM_POOL_BLOCKS);
+    assert(PTRS_LEFT < TM_POOL_INDEXES);
 
     if(!freed_isvalid()){tm_debug("[ERROR] general freed check failed"); return false;}
 
     // Do a complete check on ALL indexes
-    for(index=1; index<TM_MAX_POOL_PTRS; index++){
+    for(index=1; index<TM_POOL_INDEXES; index++){
         if((!POINTS(index)) && FILLED(index)){
             tm_debug("[ERROR] index=%u is filled but doesn't point", index);
             index_print(index);
             return false;
         }
         if(POINTS(index)){  // only check indexes that point to something
-            assert(NEXT(index) < TM_MAX_POOL_PTRS);
+            assert(NEXT(index) < TM_POOL_INDEXES);
             if(!NEXT(index)){  // This should be the last index
                 if(flast || (tm_pool.last_index != index)){  // only 1 last index
                     tm_debug("last index error");
@@ -833,7 +901,7 @@ bool                pool_isvalid(){
             if(FILLED(index))   {filled+=BLOCKS(index); ptrs_filled++;}  // keep track of count
             else{
                 freed+=BLOCKS(index); ptrs_freed++;                     // keep track of count
-                assert(FREE_NEXT(index) < TM_MAX_POOL_PTRS); assert(FREE_PREV(index) < TM_MAX_POOL_PTRS);
+                assert(FREE_NEXT(index) < TM_POOL_INDEXES); assert(FREE_PREV(index) < TM_POOL_INDEXES);
                 if(!freed_isin(index)){
                     tm_debug("[ERROR] index is freed but isn't in freed array:"); index_print(index);
                     return false;
@@ -905,7 +973,7 @@ bool                pool_isvalid(){
 
     if(testing){
         // if testing assume that all filled indexes should have correct "filled" data
-        for(index=1; index<TM_MAX_POOL_PTRS; index++){
+        for(index=1; index<TM_POOL_INDEXES; index++){
             if(FILLED(index)){
                 if(!check_index(index)){
                     DBGprintf("[ERROR] index failed check:"); index_print(index); return 0;
@@ -966,165 +1034,16 @@ void        tfree(tm_index_t index){
     tm_free(index);
     /*fill_index(index);*/
 }
+#endif
 
+#ifdef TM_TESTS
 /*---------------------------------------------------------------------------*/
 /*      Tests                                                                */
 #define mu_assert(test) if (!(test)) {assert(test); return "FAILED\n";}
 
-char *test_tm_pool_new(){
-    tm_index_t i;
-    tm_size_t size;
-    tm_reset();
-
-    mu_assert(HEAP == 0);
-    mu_assert(HEAP_LEFT_BYTES == TM_POOL_SIZE);
-
-    mu_assert(tm_pool.filled[0] == 1);
-    mu_assert(tm_pool.points[0] == 1);
-    for(i=1; i<MAX_BIT_INDEXES; i++){
-        mu_assert(tm_pool.filled[i] == 0);
-        mu_assert(tm_pool.points[i] == 0);
-    }
-
-    for(i=0; i<TM_MAX_POOL_PTRS; i++){
-        mu_assert(tm_pool.pointers[i].loc == 0);
-        mu_assert(tm_pool.pointers[i].next == 0);
-    }
-
-    for(i=0; i<FREED_BINS; i++){
-        mu_assert(tm_pool.freed[i] == 0);
-    }
-    mu_assert(freed_count(&size) == 0);
-    mu_assert(size == 0);
-    return NULL;
-}
-
-char *test_tm_pool_alloc(){
-    tm_size_t size;
-    uint8_t i;
-    uint16_t heap = 0, ptrs=1;
-    tm_reset();
-
-    mu_assert(freed_count(&size) == 0);
-    mu_assert(size == 0);
-
-    tm_index_t index;
-    tm_index_t indexes[10];
-
-    index = talloc(sizeof(uint32_t));
-    mu_assert(index == 1);
-    mu_assert(tm_pool.pointers[1].loc == heap);
-    heap += ALIGN_BLOCKS(sizeof(uint32_t)); ptrs++;
-    mu_assert(HEAP == heap);
-    mu_assert(tm_pool.ptrs_filled == ptrs);
-
-    mu_assert(check_index(index));
-    for(i=0; i<10; i++){
-        indexes[i] = talloc(8);
-        mu_assert(indexes[i]);
-        mu_assert(tm_pool.pointers[i + 2].loc == heap);
-        heap += ALIGN_BLOCKS(8); ptrs++;
-        mu_assert(HEAP == heap);
-        mu_assert(tm_pool.ptrs_filled == ptrs);
-        mu_assert(i + 2 == indexes[i]);
-    }
-    mu_assert(check_index(index));
-    for(i=0; i<10; i++) mu_assert(check_index(indexes[i]));
-    mu_assert(pool_isvalid());
-    return NULL;
-}
-
-char *test_tm_free_basic(){
-    int8_t i, j;
-    tm_index_t filled_ptrs;
-    tm_index_t filled_blocks;
-    tm_size_t heap;
-    tm_index_t indexes[100];
-
-    // allocate a bunch of memory, then free chunks of it.
-    // Then allocate it again, making sure the heap doesn't change
-    filled_ptrs = tm_pool.ptrs_filled;
-    filled_blocks = tm_pool.filled_blocks;
-    for(i=0; i<100; i++){
-        indexes[i] = talloc(i+1);
-        mu_assert(indexes[i]);
-        filled_ptrs++;
-        filled_blocks += ALIGN_BLOCKS(i+1);
-        mu_assert(tm_sizeof(indexes[i]) == ALIGN_BYTES(i+1));
-        mu_assert(filled_ptrs == tm_pool.ptrs_filled);
-        mu_assert(filled_blocks == tm_pool.filled_blocks);
-        mu_assert(pool_isvalid());
-    }
-    for(i=0; i<100; i++) mu_assert(tm_sizeof(indexes[i]) == ALIGN_BYTES(i+1));
-
-    heap = filled_blocks;
-    for(i=0; i<100; i++) mu_assert(check_index(indexes[i]));
-    for(i=2; i<100; i+=2){ // free the even ones
-        tm_free(indexes[i]);
-        filled_ptrs--;
-        filled_blocks -= ALIGN_BLOCKS(i+1);
-        mu_assert(filled_ptrs == tm_pool.ptrs_filled);
-        mu_assert(filled_blocks == tm_pool.filled_blocks);
-        mu_assert(pool_isvalid());
-        mu_assert(heap == HEAP);
-    }
-    for(i=0; i<100; i++) mu_assert(check_index(indexes[i]));
-    mu_assert(pool_isvalid());
-    return NULL;
-}
-
-char *test_tm_pool_realloc(){
-    tm_index_t index, prev_index, other_index, index2;
-    uint8_t i, n;
-    uint16_t used = 0;
-    uint16_t used_ptrs = 1;
-    tm_size_t size;
-
-    tm_reset();
-
-    // allocate data
-    index = talloc(40);
-    mu_assert(index);
-    used+=ALIGN_BLOCKS(40); used_ptrs++;
-    mu_assert(used == tm_pool.filled_blocks);
-    mu_assert(used_ptrs == tm_pool.ptrs_filled);
-    mu_assert(pool_isvalid());
-
-    // shrink data
-    prev_index = index;
-    index = tm_realloc(index, 32);
-    mu_assert(index == prev_index);
-    used-=ALIGN_BLOCKS(8);  // more free memory
-    mu_assert(tm_sizeof(index) == 32);
-    mu_assert(used == tm_pool.filled_blocks);
-    mu_assert(used_ptrs == tm_pool.ptrs_filled);
-    mu_assert(1 == tm_pool.ptrs_freed);
-    mu_assert(1 == freed_count(&size));
-    mu_assert(8 == size);
-    mu_assert(ALIGN_BLOCKS(8) == tm_pool.freed_blocks);
-    mu_assert(pool_isvalid());
-
-    // grow data
-    index2 = tm_alloc(4);       // force heap allocation
-    used += ALIGN_BLOCKS(4); used_ptrs++;
-    mu_assert(used == tm_pool.filled_blocks);
-    mu_assert(used_ptrs == tm_pool.ptrs_filled);
-    mu_assert(tm_sizeof(index) == 32);
-
-    prev_index = index;
-
-    index = tm_realloc(index, 60);
-    mu_assert(index);
-    mu_assert(index != prev_index);
-    used += ALIGN_BLOCKS(60) - ALIGN_BLOCKS(32);
-    mu_assert(used == tm_pool.filled_blocks);
-    mu_assert(used_ptrs == tm_pool.ptrs_filled);
-    mu_assert(pool_isvalid());
-    return NULL;
-}
 
 #define TEST_INDEXES        2000
-#define TEST_TIMES          20
+#define TEST_TIMES          10
 #define LARGE_SIZE          2048
 #define SMALL_SIZE          128
 #define SIZE_DISTRIBUTION   20
@@ -1234,3 +1153,4 @@ char *test_tinymem(){
     DBGprintf("\n");
     return NULL;
 }
+#endif
