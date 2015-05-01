@@ -1132,15 +1132,27 @@ char *test_tm_pool_realloc(){
 #define FREE_AMOUNT         2
 #define MAX_SKIP            20
 
+
+/**
+ * Use the pseudo random number generator rand() to randomly allocate and deallocate
+ * a whole bunch of data, then use pool_isvalid() to make sure everything is still
+ * valid.
+ *
+ * This test randomly allocates and frees thousands of times and defragments tens of times.
+ */
+
+typedef struct {
+    tm_index_t index;
+    tm_size_t  blocks;
+} mem_allocated;
+
 char *test_tinymem(){
-    // Throw a whole bunch of allocations, frees, etc at the library and see
-    // what sticks
     tm_debug("Starting test tinymem");
     testing = true;
     srand(777);
     uint32_t i, j, loop;
     uint32_t defrags = 0, fills=0, frees=0, purges=0;   // record how many operations have been done
-    tm_index_t indexes[TEST_INDEXES] = {0};
+    mem_allocated indexes[TEST_INDEXES] = {0};
     tm_size_t used = 0, size;
     uint8_t mod = 125;
     bool acted = true;
@@ -1150,13 +1162,15 @@ char *test_tinymem(){
         if(acted) tm_debug("loop=%u", loop);
         acted = false;
         for(i=rand() % MAX_SKIP; i<TEST_INDEXES; i+=rand() % MAX_SKIP){
-            if(indexes[i]){
+            if(indexes[i].index){
                 // index is filled, free it sometimes
                 /*if(!(rand() % FREE_AMOUNT)){*/
                 if(1){
                     /*DBGprintf("freeing i=%u,l=%u:", i, loop); index_print(indexes[i]);*/
-                    used -= BLOCKS(indexes[i]);
-                    tfree(indexes[i]);
+                    mu_assert(BLOCKS(indexes[i].index) == indexes[i].blocks)
+                    used -= BLOCKS(indexes[i].index);
+                    tfree(indexes[i].index);
+                    indexes[i].blocks = 0;
                     mu_assert(used == tm_pool.filled_blocks);
                     frees++;
                     acted = true;
@@ -1170,12 +1184,12 @@ char *test_tinymem(){
                     if(i==61 && loop==1){
                         /*__asm__("int $3");*/
                     }
-                    indexes[i] = talloc(size);
-                    fills++;
-                    mu_assert(indexes[i]);
+                    indexes[i].index = talloc(size);
+                    indexes[i].blocks = BLOCKS(indexes[i].index);
+                    mu_assert(indexes[i].index);
                     used+=ALIGN_BLOCKS(size); mu_assert(used == tm_pool.filled_blocks);
-                    mu_assert(ALIGN_BLOCKS(size) == BLOCKS(indexes[i]));
-                    acted = true;
+                    mu_assert(ALIGN_BLOCKS(size) == BLOCKS(indexes[i].index));
+                    fills++; acted = true;
                 }
             }
             if(STATUS(TM_DEFRAG_FULL_DONE)){
@@ -1186,21 +1200,28 @@ char *test_tinymem(){
             if(acted){
                 DBGprintf("checking i=%u,l=%u,ffdp=(%u,%u,%u,%u):",
                           i, loop, fills, frees, defrags, purges);
-                index_print(indexes[i]);
-                if(!FILLED(indexes[i])) indexes[i] = 0;
+                index_print(indexes[i].index);
+                if(!FILLED(indexes[i].index)){
+                    indexes[i].index = 0;
+                    assert(indexes[i].blocks == 0);
+                }
                 mu_assert(pool_isvalid());
                 for(j=0; j<TEST_INDEXES; j++){
-                    if(indexes[j]) mu_assert(check_index(indexes[j]));
+                    if(indexes[j].index){
+                        mu_assert(BLOCKS(indexes[j].index) == indexes[j].blocks);
+                        mu_assert(check_index(indexes[j].index));
+                    }
                 }
             }
         }
         if(!(rand() % PURGE_DISTRIBUTION)){
             // free tons of indexes
             for(i=0; i<TEST_INDEXES; i+=rand()%5){
-                if(indexes[i]){
-                    used -= BLOCKS(indexes[i]);
-                    tfree(indexes[i]);
-                    indexes[i] = 0;
+                if(indexes[i].index){
+                    used -= BLOCKS(indexes[i].index);
+                    tfree(indexes[i].index);
+                    indexes[i].index = 0;
+                    indexes[i].blocks = 0;
                     frees++;
                 }
                 mu_assert(pool_isvalid());
