@@ -25,9 +25,8 @@
  *                      CLOCKS_PER_SEC  -- macro for number of clocks/second
  *                          returned by clock()
  */
-//#include "time.h"
-
-//#define CPU_CLOCKS_PER_SEC      (700000000uL)     // Defined at 700MHz for general
+#include "time.h"
+#define CPU_CLOCKS_PER_SEC      (700000000uL)     // Defined at 700MHz for general
 
 /*---------------------------------------------------------------------------*/
 /**
