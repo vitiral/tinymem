@@ -156,7 +156,7 @@ tm_index_t      freed_get(const tm_blocks_t size);
 void index_extend(const tm_index_t index, const tm_blocks_t blocks, const bool filled);
 void index_remove(const tm_index_t index, const tm_index_t prev_index);
 void index_join(const tm_index_t index, const tm_index_t with_index);
-bool index_split(const tm_index_t index, const tm_blocks_t blocks);
+bool index_split(const tm_index_t index, const tm_blocks_t blocks, tm_index_t new_index);
 #define free_p(index)  ((free_block *)tm_void_p(index))
 
 // For testing
@@ -180,7 +180,8 @@ bool                check_index(tm_index_t index);
 #define BLOCKS_LEFT                 (TM_POOL_BLOCKS - tm_pool.filled_blocks)
 #define BYTES_LEFT                  (BLOCKS_LEFT * TM_BLOCK_SIZE)
 #define PTRS_USED                   (tm_pool.ptrs_filled + tm_pool.ptrs_freed)
-#define PTRS_LEFT                   (TM_POOL_INDEXES - PTRS_USED)
+#define PTRS_LEFT                   (TM_POOL_INDEXES - tm_pool.ptrs_filled) // ptrs potentially left
+#define PTRS_AVAILABLE              (TM_POOL_INDEXES - PTRS_USED) // ptrs available for immediate use
 #define HEAP_LEFT                   (TM_POOL_BLOCKS - HEAP)
 #define HEAP_LEFT_BYTES             (HEAP_LEFT * TM_BLOCK_SIZE)
 
@@ -255,7 +256,7 @@ tm_index_t      tm_alloc(tm_size_t size){
     index = freed_get(size);
     if(index){
         if(BLOCKS(index) != size){ // Split the index if it is too big
-            if(!index_split(index, size)){
+            if(!index_split(index, size, 0)){
                 // Split can fail if there are not enough pointers
                 tm_free(index);
                 STATUS_SET(TM_DEFRAG_FAST);  // need more indexes
@@ -268,6 +269,7 @@ tm_index_t      tm_alloc(tm_size_t size){
         STATUS_SET(TM_DEFRAG_FAST);  // need less fragmentation
         return 0;
     }
+    if(!PTRS_LEFT) return 0;
     index = find_index();
     if(!index){
         STATUS_SET(TM_DEFRAG_FAST);  // need more indexes
@@ -299,7 +301,7 @@ tm_index_t      tm_realloc(tm_index_t index, tm_size_t size){
     prev_size = BLOCKS(index);
     if(size == BLOCKS(index)) return index;
     if(size < prev_size){  // shrink data
-        if(!index_split(index, size)) return 0;
+        if(!index_split(index, size, 0)) return 0;
         return index;
     } else{  // grow data
         new_index = tm_alloc(size * TM_BLOCK_SIZE);
@@ -364,7 +366,6 @@ bool            tm_defrag(){
     while(NEXT(tm_pool.defrag_index)){
         if(!FILLED(tm_pool.defrag_index)){
             if(!FILLED(NEXT(tm_pool.defrag_index))){
-                /*DBGprintf("  joining above\n", tm_pool.defrag_index);*/
                 index_join(tm_pool.defrag_index, NEXT(tm_pool.defrag_index));
             }
             if(!NEXT(tm_pool.defrag_index)) break;
@@ -381,10 +382,7 @@ bool            tm_defrag(){
             tm_pool.ptrs_freed--, tm_pool.freed_blocks-=BLOCKS(tm_pool.defrag_index);
 
             // Do an odd join, where the locations are just equal
-            /*DBGprintf("  New bef join  :           "); index_print(NEXT(tm_pool.defrag_index));*/
             LOCATION(NEXT(tm_pool.defrag_index)) = LOCATION(tm_pool.defrag_index);
-            /*DBGprintf("  After odd join:           "); index_print(tm_pool.defrag_index);*/
-            /*DBGprintf("  New after join:           "); index_print(NEXT(tm_pool.defrag_index));*/
 
             // Now remove the index. Note that the size is == 0
             //      Also note that even though it was removed, it's NEXT and LOCATION
@@ -394,24 +392,17 @@ bool            tm_defrag(){
 
             assert(LOCATION(prev_index) < TM_POOL_BLOCKS);
             assert(location < TM_POOL_BLOCKS);
-            /*tm_debug("location to=%u, from=%u, size=%u, end=%u, ", LOCATION(prev_index), location,*/
-                    /*blocks, TM_POOL_BLOCKS);*/
             memmove(LOC_VOID(LOCATION(prev_index)),
                     LOC_VOID(location), ((tm_size_t)blocks) * TM_BLOCK_SIZE);
-            /*DBGprintf("  New index, before split:  "); index_print(prev_index);*/
-            if(!index_split(NEXT(tm_pool.defrag_index), blocks)){
+            // TODO: the below statement can NOT be asserted, it is not known
+            /*assert(FILLED(NEXT(prev_index)));  // it will never "join up"*/
+            if(!index_split(prev_index, blocks, tm_pool.defrag_index)){
                 assert(0); exit(-1);
             }
-            /*DBGprintf("  New index, after split:   "); index_print(prev_index);*/
-
-            /*tm_debug("blocks=%u, freespace=%u, %u==%u", blocks, BLOCKS(NEXT(prev_index)),*/
-                     /*used, tm_pool.filled_blocks);*/
-            /*tm_debug("%u==%u", BLOCKS(prev_index), blocks);*/
             assert(BLOCKS(prev_index) == blocks);
 
             tm_pool.defrag_index = NEXT(prev_index);
 
-            /*tm_debug("%u==%u", used, tm_pool.filled_blocks);*/
             assert(!FILLED(tm_pool.defrag_index));
 
         } else{
@@ -424,9 +415,6 @@ bool            tm_defrag(){
     }
 done:
     if(!FILLED(tm_pool.defrag_index)){
-        /*tm_debug("removing last index");*/
-        /*DBGprintf("index       :"); index_print(tm_pool.defrag_index);*/
-        /*DBGprintf("prev_index  :"); index_print(prev_index);*/
         index_remove(tm_pool.defrag_index, prev_index);
     }
     STATUS_CLEAR(TM_DEFRAG_IP);
@@ -452,7 +440,7 @@ tm_index_t      find_index(){
     unsigned int bits;
     uint8_t bit;
     uint8_t i;
-    if(!PTRS_LEFT) return 0;
+    if(!PTRS_AVAILABLE) return 0;
     for(loop=0; loop<2; loop++){
         for(; tm_pool.find_index < MAX_BIT_INDEXES; tm_pool.find_index++){
             bits = tm_pool.points[tm_pool.find_index];
@@ -706,14 +694,16 @@ void index_join(tm_index_t index, tm_index_t with_index){
     }while(!FILLED(with_index));
 }
 
-bool index_split(const tm_index_t index, const tm_blocks_t blocks){
+bool index_split(const tm_index_t index, const tm_blocks_t blocks, tm_index_t new_index){
     assert(blocks < BLOCKS(index));
-    tm_index_t new_index = NEXT(index);
-    if(!FILLED(new_index)){
+    if(!FILLED(NEXT(index))){
+        new_index = NEXT(index);
         // If next index is free, always join it first. This also frees up new_index to
         // use however we want!
         index_join(index, new_index);
-    } else{
+    } else if(new_index){  // an empty index has been given to us
+        // pass
+    }else{
         new_index = find_index();
         if(!new_index) return false;
     }
@@ -1090,7 +1080,7 @@ char *test_tinymem(){
                 // index is filled, free it sometimes
                 /*if(!(rand() % FREE_AMOUNT)){*/
                 if(1){
-                    DBGprintf("freeing i=%u,l=%u:", i, loop); index_print(indexes[i].index);
+                    /*DBGprintf("freeing i=%u,l=%u:", i, loop); index_print(indexes[i].index);*/
                     mu_assert(BLOCKS(indexes[i].index) == indexes[i].blocks)
                     used -= BLOCKS(indexes[i].index);
                     tfree(indexes[i].index);
@@ -1103,9 +1093,9 @@ char *test_tinymem(){
                 // index is free. decide whether to allocate large or small
                 size = (rand() % SIZE_DISTRIBUTION) ? (rand() % SMALL_SIZE) : (rand() % LARGE_SIZE);
                 size++;
-                if(size <= BYTES_LEFT){
-                    DBGprintf("filling i=%u,l=%u,size=%u, bleft=%u, pleft=%u:\n",
-                            i, loop, size, BYTES_LEFT, PTRS_LEFT);
+                if((size <= BYTES_LEFT) && PTRS_LEFT){
+                    /*DBGprintf("filling i=%u,l=%u,size=%u, bleft=%u, pavail=%u, pleft=%u:\n",*/
+                            /*i, loop, size, BYTES_LEFT, PTRS_AVAILABLE, PTRS_LEFT);*/
                     if(i==61 && loop==1){
                         /*__asm__("int $3");*/
                     }
