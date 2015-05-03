@@ -354,6 +354,7 @@ bool            tm_defrag(){
     tm_blocks_t blocks;
     tm_blocks_t location;
     tm_index_t prev_index = 0;
+    tm_debug("filled=%lu", tm_pool.filled_blocks);
     if(!STATUS(TM_DEFRAG_IP)){
         tm_pool.defrag_index = tm_pool.first_index;
         STATUS_CLEAR(TM_ANY_DEFRAG);
@@ -430,8 +431,12 @@ done:
     }
     STATUS_CLEAR(TM_DEFRAG_IP);
     STATUS_SET(TM_DEFRAG_FULL_DONE);
-    DBGprintf("## Defrag done: Heap left: start=%u, end=%lu, recovered=%lu, wasfree=%u was_avail=%lu isavail=%lu\n",
-            heap, HEAP_LEFT, HEAP_LEFT - heap, freed, available, BLOCKS_LEFT);
+    tm_debug("filled end=%lu, total=%lu, operate=%lu, isavail=%lu",
+            tm_pool.filled_blocks, TM_POOL_BLOCKS, TM_POOL_BLOCKS - tm_pool.filled_blocks,
+            BLOCKS_LEFT);
+    DBGprintf("## Defrag done: Heap left: start=%u, end=%lu, recovered=%lu, ",
+            heap, HEAP_LEFT, HEAP_LEFT - heap);
+    DBGprintf("wasfree=%u was_avail=%lu isavail=%lu,  \n", freed, available, BLOCKS_LEFT);
     assert(HEAP_LEFT - heap == freed);
     assert(tm_pool.freed_blocks == 0);
     assert(HEAP_LEFT == BLOCKS_LEFT);
@@ -1042,8 +1047,8 @@ void        tfree(tm_index_t index){
 #define mu_assert(test) if (!(test)) {assert(test); return "FAILED\n";}
 
 
-#define TEST_INDEXES        2000
-#define TEST_TIMES          10
+#define TEST_INDEXES        8000
+#define TEST_TIMES          20
 #define LARGE_SIZE          2048
 #define SMALL_SIZE          128
 #define SIZE_DISTRIBUTION   20
@@ -1085,7 +1090,7 @@ char *test_tinymem(){
                 // index is filled, free it sometimes
                 /*if(!(rand() % FREE_AMOUNT)){*/
                 if(1){
-                    /*DBGprintf("freeing i=%u,l=%u:", i, loop); index_print(indexes[i]);*/
+                    DBGprintf("freeing i=%u,l=%u:", i, loop); index_print(indexes[i].index);
                     mu_assert(BLOCKS(indexes[i].index) == indexes[i].blocks)
                     used -= BLOCKS(indexes[i].index);
                     tfree(indexes[i].index);
@@ -1099,7 +1104,8 @@ char *test_tinymem(){
                 size = (rand() % SIZE_DISTRIBUTION) ? (rand() % SMALL_SIZE) : (rand() % LARGE_SIZE);
                 size++;
                 if(size <= BYTES_LEFT){
-                    /*DBGprintf("filling i=%u,l=%u:\n", i, loop);*/
+                    DBGprintf("filling i=%u,l=%u,size=%u, bleft=%u, pleft=%u:\n",
+                            i, loop, size, BYTES_LEFT, PTRS_LEFT);
                     if(i==61 && loop==1){
                         /*__asm__("int $3");*/
                     }
@@ -1113,7 +1119,7 @@ char *test_tinymem(){
             }
             if(STATUS(TM_DEFRAG_FULL_DONE)){
                 STATUS_CLEAR(TM_DEFRAG_FULL_DONE);
-                DBGprintf("!! Defrag has been done"); defrags++;
+                DBGprintf("!! Defrag has been done\n"); defrags++;
             }
 
             if(acted){
@@ -1143,7 +1149,6 @@ char *test_tinymem(){
                     indexes[i].blocks = 0;
                     frees++;
                 }
-                mu_assert(pool_isvalid());
             }
             purges++;
             acted=true;
