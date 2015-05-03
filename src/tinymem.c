@@ -1,5 +1,6 @@
 #include "tinymem.h"
 
+#undef TM_PRINT
 #ifdef  TM_PRINT
 #define tm_debug(...)       do{printf("[DEBUG](%s,%u):", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n");}while(0)
 #define DBGprintf(...)      printf(__VA_ARGS__)
@@ -422,10 +423,14 @@ inline bool         tm_defrag(){
             memmove(LOC_VOID(LOCATION(tm_pool.defrag_prev)),
                     LOC_VOID(location), ((tm_size_t)blocks) * TM_BLOCK_SIZE);
             // TODO: the below statement can NOT be asserted, it is not known
-            /*assert(FILLED(NEXT(prev_index)));  // it will never "join up"*/
+                /*assert(FILLED(NEXT(prev_index)));  // it will never "join up"*/
+            if(!FILLED(NEXT(tm_pool.defrag_prev))){
+                index_join(tm_pool.defrag_prev, NEXT(tm_pool.defrag_prev), &clocks_left);
+            }
+            assert(FILLED(NEXT(tm_pool.defrag_prev)));  // it will never "join up"
             if(!index_split(tm_pool.defrag_prev, blocks, tm_pool.defrag_index)){
                 assert(0); exit(-1);
-            }
+            } // note: tm_pool.defrag_index is now invalid (split used it)
             assert(BLOCKS(tm_pool.defrag_prev) == blocks);
 
             tm_pool.defrag_index = NEXT(tm_pool.defrag_prev);
@@ -433,13 +438,14 @@ inline bool         tm_defrag(){
             assert(!FILLED(tm_pool.defrag_index));
 
         } else{
-            clocks_left -= 5;
+            clocks_left -= 10;
             tm_pool.defrag_prev = tm_pool.defrag_index;
             tm_pool.defrag_index = NEXT(tm_pool.defrag_index);
         }
         assert(tm_pool.defrag_prev != tm_pool.defrag_index);
         assert((i++, used == tm_pool.filled_blocks));
         assert(available == BLOCKS_LEFT);
+        if(clocks_left < 0) return 1;
     }
 done:
     if(!FILLED(tm_pool.defrag_index)){
@@ -1061,8 +1067,20 @@ bool        check_index(tm_index_t index){
 
 tm_index_t  talloc(tm_size_t size){
     tm_index_t index = tm_alloc(size);
+    uint64_t start;
     if(STATUS(TM_ANY_DEFRAG)){
-        while(tm_defrag());
+        while(1){
+            start = clock();
+            if(!tm_thread()) break;
+            start = ((clock() - start) * 1000000) / CLOCKS_PER_SEC;
+            if(start > 20){
+                printf("%lluus, ", start);
+                /*assert(0);*/
+            }
+        }
+        printf("\n");
+
+        while(tm_thread())
         assert(BLOCKS_LEFT >= ALIGN_BLOCKS(size));
         index = tm_alloc(size);
     }
