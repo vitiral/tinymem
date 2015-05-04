@@ -16,11 +16,13 @@ char *all_tests(){
     /*mu_run_test(test_tinymem);*/
     mu_test(test_tinymem(
         //  Times                   Indexes                 pool size
-            50,                     TM_POOL_INDEXES*99/100, TM_POOL_SIZE*97/100,
+            30,                     TM_POOL_INDEXES*99/100, TM_POOL_SIZE*97/100,
         //Small size                Large size              Index max skip
             128,                    2048,                   20  ,
         //  Free distribution       Size distribution       purge distribution
             20 ,                    95 ,                    33 ,
+        //  min % used
+            90,
         //  threaded
             true,
         //  return values

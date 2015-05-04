@@ -1120,13 +1120,15 @@ char *test_tinymem(
         const uint8_t FREE_DISTRIBUTION,    // % of times to free
         const uint8_t SIZE_DISTRIBUTION,    // % of times to allocate "small size"
         const uint8_t PURGE_DISTRIBUTION,   // % of times to purge after a loop
-        const bool threaded,
+        const uint8_t MIN_USED,             // minimum % memory used before free operation allowed
+        const bool threaded,                // threaded implementation (defrag happens during operation)
         uint32_t *defrags, uint32_t *fills, uint32_t *frees, uint32_t *purges
         ){
     tm_debug("Starting test tinymem");
     testing = true;
     srand(777);
     uint32_t i, j, loop;
+    tm_blocks_t size_blocks = CEILING(TEST_SIZE_BYTES, TM_BLOCK_SIZE);
     mem_allocated indexes[TM_POOL_INDEXES] = {{0,0}};
     memset(indexes, 0, TM_POOL_INDEXES * sizeof(mem_allocated));
     tm_size_t used = 0, size;
@@ -1143,7 +1145,8 @@ char *test_tinymem(
         for(i=rand() % MAX_SKIP; i<TEST_INDEXES; i+=rand() % MAX_SKIP){
             if(indexes[i].index){
                 // index is filled, free it sometimes
-                if(rand() % 100 < FREE_DISTRIBUTION){
+                if((rand() % 100 < FREE_DISTRIBUTION) &&
+                        ((uint32_t)tm_pool.filled_blocks * 100 / size_blocks > MIN_USED)){
                     /*DBGprintf("freeing i=%u,l=%u:", i, loop); index_print(indexes[i].index);*/
                     mu_assert(BLOCKS(indexes[i].index) == indexes[i].blocks)
                     used -= BLOCKS(indexes[i].index);
@@ -1208,6 +1211,7 @@ char *test_tinymem(
             // free tons of indexes
             for(i=0; i<TEST_INDEXES; i+=rand()%5){
                 if(indexes[i].index){
+                    if((uint32_t)tm_pool.filled_blocks * 100 / size_blocks <= MIN_USED) break;
                     used -= BLOCKS(indexes[i].index);
                     ptrs_used--;
                     tfree(indexes[i].index);

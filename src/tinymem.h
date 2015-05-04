@@ -177,6 +177,7 @@ char                *test_tinymem(
         const uint8_t FREE_DISTRIBUTION,
         const uint8_t SIZE_DISTRIBUTION,
         const uint8_t PURGE_DISTRIBUTION,
+        const uint8_t MIN_USED,
         const bool threaded,
         uint32_t *defrags, uint32_t *fills, uint32_t *frees, uint32_t *purges
         );
