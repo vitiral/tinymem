@@ -16,13 +16,13 @@ char *all_tests(){
     /*mu_run_test(test_tinymem);*/
     mu_test(test_tinymem(
         //  Times                   Indexes                 pool size
-            10,                     8000,                   TM_POOL_SIZE,
+            10,                     TM_POOL_INDEXES*99/100, TM_POOL_SIZE*97/100,
         //Small size                Large size              Index max skip
             128,                    2048,                   20,
         //  Free distribution       Size distribution       purge distribution
-            100,                      20,                     2,
+            100,                    95,                     50,
         //  threaded
-            false,
+            true,
         //  return values
             &defrags, &fills, &frees, &purges
     ));
