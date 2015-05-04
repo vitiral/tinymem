@@ -366,10 +366,22 @@ inline bool     tm_check(const tm_index_t index, const tm_size_t size){
 
 /*---------------------------------------------------------------------------*/
 inline bool     tm_thread(){
-    // TODO: set defrag under certain user defined conditions (small heap with
-    //  memory available)
     if(STATUS(TM_ANY_DEFRAG)){
         return tm_defrag();
+    }
+    if(BLOCKS_LEFT / TM_POOL_BLOCKS >= TM_DEFRAG_SIZE){
+        // check if there are blocks to be recovered
+        if(tm_pool.freed_blocks / (tm_pool.filled_blocks + tm_pool.freed_blocks) >= TM_DEFRAG_MIN){
+            STATUS_SET(TM_DEFRAG_FAST);
+        }
+        return 1;
+    }
+    if(PTRS_LEFT / TM_POOL_INDEXES >= TM_DEFRAG_INDEXES){
+        // check if there are indexes to be recovered
+        if(tm_pool.ptrs_freed / (tm_pool.ptrs_filled + tm_pool.ptrs_freed) >= TM_DEFRAG_MIN){
+            STATUS_SET(TM_DEFRAG_FAST);
+        }
+        return 1;
     }
     return 0;   // no operations pending
 }
@@ -1057,11 +1069,10 @@ tm_index_t  talloc(tm_size_t size, bool threaded){
             if(!tm_thread()) break;
             start = ((clock() - start) * 1000000) / CLOCKS_PER_SEC;
 #ifndef TM_PRINT
-            assert(start < 20);
+            /*assert(start < 20);*/
 #endif
         }
 
-        while(tm_thread())
         assert(BLOCKS_LEFT >= ALIGN_BLOCKS(size));
         index = tm_alloc(size);
     }
@@ -1081,7 +1092,7 @@ void        tfree(tm_index_t index){
 /*---------------------------------------------------------------------------*/
 /*      Tests                                                                */
 #define mu_assert(test) if (!(test)) {TESTprint("MU ASSERT FAILED(%s,%u): \"%s\"\n", \
-        __FILE__, __LINE__, #test); return "FAILED\n";}
+        __FILE__, __LINE__, __func__); return "FAILED\n";}
 
 
 /**
@@ -1128,8 +1139,7 @@ char *test_tinymem(
         for(i=rand() % MAX_SKIP; i<TEST_INDEXES; i+=rand() % MAX_SKIP){
             if(indexes[i].index){
                 // index is filled, free it sometimes
-                /*if(!(rand() % FREE_DISTRIBUTION)){*/
-                if(1){
+                if(rand() % 100 < FREE_DISTRIBUTION){
                     /*DBGprintf("freeing i=%u,l=%u:", i, loop); index_print(indexes[i].index);*/
                     mu_assert(BLOCKS(indexes[i].index) == indexes[i].blocks)
                     used -= BLOCKS(indexes[i].index);
@@ -1145,7 +1155,7 @@ char *test_tinymem(
                 size = (rand() % SIZE_DISTRIBUTION) ? (rand() % SMALL_SIZE) : (rand() % LARGE_SIZE);
                 size++;
                 /*if((size <= BYTES_LEFT) && PTRS_LEFT){*/
-                if((used + size < TEST_SIZE_BYTES) && (PTRS_LEFT)){
+                if((used * TM_BLOCK_SIZE + size < TEST_SIZE_BYTES) && (ptrs_used < TEST_INDEXES)){
                     /*DBGprintf("filling i=%u,l=%u,size=%u, bleft=%u, pavail=%u, pleft=%u:\n",*/
                             /*i, loop, size, BYTES_LEFT, PTRS_AVAILABLE, PTRS_LEFT);*/
                     if(i==61 && loop==1){

@@ -104,6 +104,18 @@
  */
 #define TM_POOL_SIZE            ((0xFFFF + 1)*TM_BLOCK_SIZE - TM_BLOCK_SIZE)
 
+/*---------------------------------------------------------------------------*/
+/**
+ * \brief           Percentage of fragmentation at which tm_thread will
+ *                  automatically defrag
+ *
+ *                  Note that these won't actually trigger a defrag unless
+ *                  the system is at least TM_DEFRAG_MIN fragmentated
+ */
+
+#define TM_DEFRAG_SIZE          90
+#define TM_DEFRAG_INDEXES       90
+#define TM_DEFRAG_MIN           5       // Minimum fragmentation that has to exist to operate
 
 #define TM_H_ATTPACKPRE         __attribute__ ((__packed__))
 #define TM_H_ATTPACKSUF
