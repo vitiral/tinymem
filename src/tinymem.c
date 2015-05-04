@@ -1,7 +1,7 @@
 /*#define NDEBUG*/
 #include "tinymem.h"
 
-/*#undef TM_PRINT*/
+#undef TM_PRINT
 #ifdef  TM_PRINT
 #define tm_debug(...)       do{printf("[DEBUG](%s,%u):", __FILE__, __LINE__); printf(__VA_ARGS__); printf("\n");}while(0)
 #define DBGprintf(...)      printf(__VA_ARGS__)
@@ -822,12 +822,12 @@ bool index_split(const tm_index_t index, const tm_blocks_t blocks, tm_index_t ne
 bool testing = false;
 
 void                pool_print(){
-    DBGprintf("## Pool (status=%x):\n", tm_pool.status);
-    DBGprintf("    mem blocks: heap=  %-7u     filled=%-7u  freed=%-7u     total=%-7u\n",
+    TESTprint("## Pool (status=%x):\n", tm_pool.status);
+    TESTprint("    mem blocks: heap=  %-7u     filled=%-7u  freed=%-7u     total=%-7u\n",
             HEAP, tm_pool.filled_blocks, tm_pool.freed_blocks, TM_POOL_BLOCKS);
-    DBGprintf("    avail ptrs: filled=  %-7u   freed= %-7u   used=%-7u,    total= %-7u\n",
+    TESTprint("    avail ptrs: filled=  %-7u   freed= %-7u   used=%-7u,    total= %-7u\n",
             tm_pool.ptrs_filled, tm_pool.ptrs_freed, PTRS_USED, TM_POOL_INDEXES);
-    DBGprintf("    indexes   : first=%u, last=%u\n", tm_pool.first_index, tm_pool.last_index);
+    TESTprint("    indexes   : first=%u, last=%u\n", tm_pool.first_index, tm_pool.last_index);
 }
 
 void                freed_print(){
@@ -1222,6 +1222,7 @@ char *test_tinymem(
         }
     }
     DBGprintf("\n");
+    pool_print();
     return NULL;
 }
 #endif

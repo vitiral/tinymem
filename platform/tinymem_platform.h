@@ -113,8 +113,8 @@
  *                  the system is at least TM_DEFRAG_MIN fragmentated
  */
 
-#define TM_DEFRAG_SIZE          60      // trigger at this % heap size
-#define TM_DEFRAG_INDEXES       60
+#define TM_DEFRAG_SIZE          85      // trigger at this % heap size
+#define TM_DEFRAG_INDEXES       90      // trigger at this % used indexes
 #define TM_DEFRAG_MIN           2       // Minimum fragmentation that has to exist to operate
 
 #define TM_H_ATTPACKPRE         __attribute__ ((__packed__))
