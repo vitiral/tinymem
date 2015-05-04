@@ -66,7 +66,7 @@
  *
  *                  Each index uses sizeof(tm_index_t) * 2 bytes of data
  */
-#define TM_POOL_INDEXES        (2048)
+#define TM_POOL_INDEXES        (8192)
 
 /*---------------------------------------------------------------------------*/
 /**

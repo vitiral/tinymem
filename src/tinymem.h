@@ -167,7 +167,19 @@ char*               test_tm_pool_new();
 char*               test_tm_pool_alloc();
 char*               test_tm_free_basic();
 char*               test_tm_pool_realloc();
-char*               test_tinymem();
+char                *test_tinymem(
+        const uint16_t TEST_TIMES,
+        const tm_index_t TEST_INDEXES,
+        const tm_size_t TEST_SIZE_BYTES,
+        const tm_size_t SMALL_SIZE,
+        const tm_size_t LARGE_SIZE,
+        const tm_index_t MAX_SKIP,
+        const uint8_t FREE_DISTRIBUTION,
+        const uint8_t SIZE_DISTRIBUTION,
+        const uint8_t PURGE_DISTRIBUTION,
+        const bool threaded,
+        uint32_t *defrags, uint32_t *fills, uint32_t *frees, uint32_t *purges
+        );
 #endif
 
 
