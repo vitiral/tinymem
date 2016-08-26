@@ -679,68 +679,57 @@ void index_extend(const tm_index_t index, const tm_blocks_t blocks,
     }
 }
 
+void index_remove(const tm_index_t index, const tm_index_t prev_index){
+  // Completely remove the index. Used for combining indexes and when defragging
+  //      from end (to combine heap).
+  //      This function also combines the indexes (NEXT(prev_index) = NEXT(index))
+  // Note: NEXT(index) and LOCATION(index) **must not change**. They are used by other code
+  //
+  //  Update information
+  // possibilities:
+  //      both are free:              this happens when joining free indexes
+  //      prev filled, index free:    this happens for realloc and all the time
+  //      prev free, index filled:    this should only happen during defrag
+  //      both filled:                this should never happen
+  //
+  //
+  //
+  switch(((FILLED(prev_index) ? 1:0) << 1) + (FILLED(index) ? 1:0)){
+  case 0:  // merging two free values
+    assert(freed_isin(index));
+    tm_pool.ptrs_freed--;
+    // if index is last value, freed_blocks will be reduced
+    if(!NEXT(index)) tm_pool.freed_blocks -= BLOCKS(index);
+    tm_pool.freed[freed_bin(BLOCKS(index))] = FREE_NEXT(index); // EdizonTN: remove from BIN
+    break;
+  case 2:  // growing prev_index "up"
+    freed_remove(index);
+    tm_pool.freed_blocks -= BLOCKS(index);
+    // grow prev_index, unless index is last value
+    if(NEXT(index)) tm_pool.filled_blocks += BLOCKS(index);
+    tm_pool.ptrs_freed--;
+    break;
+  case 3:  // combining two filled indexes, used ONLY in defrag
+    assert(STATUS(TM_DEFRAG_IP));  // TODO: have a better way to check when threading
+    tm_pool.ptrs_filled--;
+    break;
+  default:
+    assert(0);
+  }
 
-void index_remove(const tm_index_t index, const tm_index_t prev_index, bool defrag){
-    // Completely remove the index. Used for combining indexes and when defragging
-    //      from end (to combine heap).
-    //      This function also combines the indexes (NEXT(prev_index) = NEXT(index))
-    // Note: NEXT(index) and LOCATION(index) **must not change**. They are used by other code
-    //
-    //  Update information
-    // possibilities:
-    //      both are free:              this happens when joining free indexes
-    //      prev filled, index free:    this happens for realloc and all the time
-    //      prev free, index filled:    this should only happen during defrag
-    //      both filled:                this should never happen
-    //
-    //
-    //
-    assert(index);
-    switch(((FILLED(prev_index) ? 1:0) << 1) + (FILLED(index) ? 1:0)){
-        case 0b00:  // merging two free values
-            // TODO: this causes failure, find out why
-            freed_remove(index);
-            tm_pool.ptrs_freed--;  // no change in blocks, both are free
-            // if index is last value, freed_blocks will be reduced
-            if(!NEXT(index)) tm_pool.freed_blocks -= BLOCKS(index);
-            break;
-        case 0b10:  // growing prev_index "up"
-            freed_remove(index);
-            tm_pool.freed_blocks -= BLOCKS(index); tm_pool.ptrs_freed--;
-            // grow prev_index, unless index is last value
-            if(NEXT(index)) tm_pool.filled_blocks += BLOCKS(index);
-            break;
-        case 0b11:  // combining two filled indexes, used ONLY in defrag
-            assert(defrag);  // defrag is using
-            tm_pool.ptrs_filled--;
-            break;
-        default:
-            assert(0);
-    }
-
-    if(index == tm_pool.first_index) tm_pool.first_index = NEXT(index);
-    // Combine indexes (or heap)
-    if(NEXT(index)) {
-        NEXT(prev_index) = NEXT(index);
-    } else{ // this is the last index, move the heap
-        assert(tm_pool.last_index == index);
-        tm_pool.last_index = prev_index;
-        if(prev_index)  NEXT(prev_index) = 0;
-        else            tm_pool.first_index = 0;  // prev_index == 0
-        HEAP = LOCATION(index);
-    }
-    FILLED_CLEAR(index);
-    POINTS_CLEAR(index);
-    // Check for defragmentation settings
-    if(!defrag){
-        if(index == tm_pool.defrag_index){
-            assert(prev_index == tm_pool.defrag_prev);
-            tm_pool.defrag_index = NEXT(index);  // index is gone, defrag should do next index
-        } else if(index == tm_pool.defrag_prev){
-            tm_pool.defrag_prev = prev_index;  // index is gone, joined with prev_index
-        }
-    }
-
+  if(index == tm_pool.first_index) tm_pool.first_index = NEXT(index);
+  // Combine indexes (or heap)
+  if(NEXT(index)) {
+    NEXT(prev_index) = NEXT(index);
+  } else{ // this is the last index
+    assert(tm_pool.last_index == index);
+    tm_pool.last_index = prev_index;
+    if(prev_index)  NEXT(prev_index) = 0;
+    else            tm_pool.first_index = 0;
+    HEAP = LOCATION(index);
+  }
+  FILLED_CLEAR(index);
+  POINTS_CLEAR(index);
 }
 
 inline void index_join(tm_index_t index, tm_index_t with_index, int32_t *clocks_left){

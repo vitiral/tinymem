@@ -7,6 +7,5 @@ directories.append('tests')
 tests = mk.sourcefiles('tests')
 
 if __name__ == '__main__':
-    mk.compile(directories, sources, tests,
-               clean=mk.cleanfiles(directories))
+    mk.compile(directories, sources, tests)
     mk.runtests('tests')
