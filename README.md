@@ -1,5 +1,8 @@
 # tinymem: the tiny memory manager
 
+# **This library is not supported anymore. Development is taking place on
+# the rust implementation at https://github.com/vitiral/defrag-rs**
+
 tinymem is a tiny memory manager written in pure C. It is designed to be a cross
 platform tool to manage memory for both embedded and posix environments. It provides
 smart, simple and powerful memory management without the need of an operating
